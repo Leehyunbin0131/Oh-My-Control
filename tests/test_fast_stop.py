@@ -21,6 +21,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class FeedbackStopTests(unittest.TestCase):
+    def test_immediate_hold_command_transitions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            binary = str(Path(folder) / 'firmware')
+            subprocess.run(['g++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+                            '-I', str(ROOT / 'tests/native'), str(ROOT / 'tests/firmware_protocol_test.cpp'),
+                            '-o', binary], check=True)
+            subprocess.run([binary, '--immediate-hold'], check=True)
+
     def test_production_firmware_parser_and_timer(self):
         with tempfile.TemporaryDirectory() as folder:
             binary = str(Path(folder) / 'firmware')

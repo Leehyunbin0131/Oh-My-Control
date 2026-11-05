@@ -169,6 +169,11 @@ struct VelocityControl {
       int32_t measured=measuredQ16[i];
       const bool zero=!target[i];
       if(zero) {
+        // Capture this control tick's encoder snapshot as soon as the zero
+        // target is applied. Renewing zero must never move the HOLD origin.
+        if(state[i]!=HOLD&&hold[i].enabled) {
+          holdReference[i]=counts[i]; holdStarted[i]=now; state[i]=HOLD; clearIntegral(i);
+        }
         // First reverse edge: discard stale forward velocity instead of
         // continuing to apply the old braking polarity into reverse motion.
         if(state[i]!=HOLD&&steps&&sign(steps)*sign(fastBefore)<0&&sign(output[i])==sign(steps)) {
@@ -176,6 +181,7 @@ struct VelocityControl {
         }
         if(static_cast<uint32_t>(now-lastEdge[i])>=8) fastQ16[i]=0;
         measured=fastQ16[i];
+        // Standstill is telemetry/cleanup information, not a HOLD entry gate.
         const int32_t d=delta(counts[i],stableOrigin[i]);
         if(d < -32767||d>32767||measured > 65536L||measured < -65536L) resetWindow(i,now);
         else {
@@ -183,9 +189,6 @@ struct VelocityControl {
           if(d>stableHigh[i]) stableHigh[i]=d;
           if(stableHigh[i]-stableLow[i]>2) resetWindow(i,now);
           else settled[i]=static_cast<uint32_t>(now-stableSince[i])>=100;
-        }
-        if(state[i]!=HOLD&&settled[i]&&hold[i].enabled) {
-          holdReference[i]=counts[i]; holdStarted[i]=now; state[i]=HOLD; clearIntegral(i);
         }
         if(state[i]==HOLD) {
           const HoldConfig& h=hold[i];

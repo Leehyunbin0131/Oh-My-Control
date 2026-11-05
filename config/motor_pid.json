@@ -1060,6 +1060,12 @@
     "user_feedback": "이제 확실히 강하게 버팁니다",
     "evidence_directory": "reports/teleop_20261105_203357_327082",
     "on_hardware_tested": true,
+    "immediate_entry_validation": {
+      "entry_mode": "first_zero_target_control_tick",
+      "status": "uploaded_user_braking_test_pending",
+      "on_hardware_tested": false,
+      "note": "Prior user confirmation applies to static holding strength; immediate-entry braking has not been tested on hardware."
+    },
     "quantitative_validation_completed": false,
     "thermal_tested": false
   }

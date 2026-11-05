@@ -17,6 +17,59 @@ void command(uint32_t seq,const std::string& op,bool fragmented=false) {
   while(Serial.available()) loop();
 }
 uint32_t nextSeq() { return lastSequence+1; }
+void testImmediateHold() {
+  for(unsigned i=0;i<2;++i) {
+    command(nextSeq(),"HOLD_PI,"+std::to_string(i)+",8000,0");
+    command(nextSeq(),"HOLD_POS,"+std::to_string(i)+",18000");
+    command(nextSeq(),"HOLD,"+std::to_string(i)+",1,25,500,350,1,100,0,1000");
+  }
+  // 1. Moving wheels enter HOLD on the first control tick applying zero.
+  // Opposite encoder signs exercise both feedback polarities together.
+  command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,7200,-7200,300");
+  for(unsigned n=0;n<12;++n) { encR.count+=3; encL.count+=3; tick(); }
+  command(nextSeq(),"SET_SPEED,0,0,300"); const auto stopSeq=lastSequence;
+  encR.count+=3; encL.count+=3; tick();
+  assert(!motion.fault&&appliedSequence==stopSeq);
+  const uint32_t origin[2]={encR.count,encL.count};
+  for(unsigned i=0;i<2;++i) {
+    assert(velocity.state[i]==VelocityControl::HOLD&&!velocity.settled[i]);
+    assert(velocity.holdReference[i]==origin[i]);
+    assert(std::abs(velocity.output[i])>150&&std::abs(velocity.output[i])<=350);
+  }
+  assert(velocity.output[0]<0&&velocity.output[1]>0);
+  std::cout<<"PASS: zero target applies HOLD and braking output on its first control tick\n";
+
+  // 2. Renewals while displaced retain the stop-command reference.
+  encR.count+=2; encL.count+=2; tick();
+  for(unsigned n=0;n<3;++n) {
+    command(nextSeq(),"SET_SPEED,0,0,300"); tick(20);
+    assert(!motion.fault);
+    for(unsigned i=0;i<2;++i) assert(velocity.holdReference[i]==origin[i]);
+  }
+  assert(velocity.positionError[0]==-2&&velocity.positionError[1]==2);
+  assert(velocity.output[0]<0&&velocity.output[1]>0);
+  std::cout<<"PASS: renewed zero targets preserve the reference and restoring output\n";
+
+  // 3. A new drive target releases that wheel; STOP/lease/error still disarm.
+  command(nextSeq(),"SET_SPEED,3000,0,300"); tick();
+  assert(velocity.state[0]==VelocityControl::TRACK&&velocity.state[1]==VelocityControl::HOLD);
+  assert(velocity.output[0]>0&&velocity.holdReference[1]==origin[1]);
+  encR.count+=2;
+  command(nextSeq(),"SET_SPEED,0,0,300"); tick();
+  assert(velocity.state[0]==VelocityControl::HOLD&&velocity.holdReference[0]==encR.count);
+  command(nextSeq(),"STOP"); tick();
+  assert(!motion.armed&&!velocity.active&&!velocity.output[0]&&!velocity.output[1]);
+  command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,0,0,300"); tick();
+  assert(velocity.state[0]==VelocityControl::HOLD);
+  for(unsigned n=0;n<3;++n) { tick(100); command(nextSeq(),"PING"); }
+  tick(2);
+  assert(motion.fault==COMMAND_EXPIRED&&!velocity.active&&!velocity.output[0]&&!velocity.output[1]);
+  command(nextSeq(),"STOP"); tick(110); command(nextSeq(),"CLEAR_FAULT");
+  command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,0,0,300"); tick();
+  for(unsigned n=0;n<7&&!motion.fault;++n) { encR.count+=16; tick(); }
+  assert(motion.fault==HOLD_LIMIT&&!velocity.active&&!velocity.output[0]&&!velocity.output[1]);
+  std::cout<<"PASS: restart, output release, command expiry and position guard remain effective\n";
+}
 void testHoldProtocol() {
   // Enabling without its independent speed PI must fail before ARM.
   command(nextSeq(),"HOLD,0,1,25,500,120,2,100,0,1000");
@@ -107,7 +160,7 @@ void elapsedWork(unsigned us) {
     }
   }
 }
-int main() {
+int main(int argc,char** argv) {
   setup(); tick(110);
   // Real parser and timer code, fake UART/I2C only; no motors are attached.
   for(unsigned i=0;i<2;++i) {
@@ -117,6 +170,8 @@ int main() {
     command(nextSeq(),"HOLD,"+std::to_string(i)+",0,25,500,120,2,100,10000,1000");
   }
   assert(!motion.fault);
+  if(argc==2&&std::string(argv[1])=="--immediate-hold") { testImmediateHold(); return 0; }
+  assert(argc==1);
   testHoldProtocol();
   command(nextSeq(),"ARM"); assert(motion.armed);
   command(nextSeq(),"SET_SPEED,10000,-10000,300",true);

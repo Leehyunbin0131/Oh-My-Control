@@ -79,17 +79,20 @@ int main() {
     assert(std::abs(p.rpm[0]-sign*30)<.8&&std::abs(p.rpm[1]+sign*30)<.8);
     p.v.stop(); assert(!p.v.active&&!p.v.output[0]&&!p.v.output[1]);
   }
-  // Hold enters after standstill, never at the original stop command position.
+  // HOLD captures the first zero-target tick, before the standstill flag.
   Plant h;
   for(int i=0;i<2;++i) {
-    assert(h.v.configureHoldPI(i,8000,10000));
-    assert(h.v.configureHold(i,true,25,500,120,2,100,0,1000));
+    assert(h.v.configureHoldPI(i,8000,0));
+    assert(h.v.configureHoldPosition(i,18000));
+    assert(h.v.configureHold(i,true,25,500,350,1,100,0,1000));
     assert(h.v.zeroGains[i].ki==0); // baseline braking remains unchanged
   }
   h.v.start(3000,3000,h.counts,h.invalid,0); h.run(2500);
-  const auto stopPosition=h.counts[0]; h.v.setTargets(0,0,h.t); h.run(1500);
+  h.v.setTargets(0,0,h.t); h.run(1);
   assert(h.v.state[0]==VelocityControl::HOLD&&h.v.state[1]==VelocityControl::HOLD);
-  const auto held=h.v.holdReference[0], heldRight=h.v.holdReference[1]; assert(held!=stopPosition);
+  const auto held=h.v.holdReference[0], heldRight=h.v.holdReference[1];
+  assert(held==h.counts[0]&&heldRight==h.counts[1]&&!h.v.settled[0]);
+  h.run(1500);
   for(int n=0;n<20;++n) { h.v.setTargets(0,0,h.t); h.run(20); assert(h.v.holdReference[0]==held); }
   for(int n=0;n<20;++n) { h.position[0]+=1; h.run(1); } // finite external displacement
   h.run(4000);
@@ -98,7 +101,10 @@ int main() {
   h.run(4000);
   assert(std::abs(VelocityControl::delta(h.counts[1],heldRight))<=3);
   h.run(65000); // no fault just because 10 or 60 seconds elapsed
-  for(int i=0;i<2;++i) assert(h.v.state[i]==VelocityControl::HOLD&&h.v.output[i]==0);
+  for(int i=0;i<2;++i) {
+    assert(h.v.state[i]==VelocityControl::HOLD&&std::abs(h.rpm[i])<.1);
+    assert(std::abs(VelocityControl::delta(h.counts[i],h.v.holdReference[i]))<=3);
+  }
   assert(!h.v.configureHoldPI(0,8000,10000)); // no live gain replacement
   h.v.setTargets(3000,0,h.t); assert(h.v.state[0]==VelocityControl::TRACK&&h.v.state[1]==VelocityControl::HOLD);
   assert(h.v.integral[0]==0); // hold effort cannot kick the next motion
