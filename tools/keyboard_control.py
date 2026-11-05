@@ -21,6 +21,7 @@ from motor_test import DEFAULT_MOTOR_PORT, MotorClient, MotorError
 from motor_pid import DEFAULT_PID_CONFIG, PIDSettings
 
 WORKSPACE = Path(__file__).resolve().parents[1]
+IN_PLACE_RPM_LIMIT = 50.0
 DIRECTIONS = {
     'q': (0.5, 1), 'w': (1, 1), 'e': (1, 0.5),
     'a': (-1, 1), 'd': (1, -1),
@@ -200,7 +201,8 @@ class Controller:
                     raise MotorError(f'{name} 엔코더 회전 부족/방향 불일치: 조종을 종료합니다.')
 
     def _step_pid(self, now):
-        desired = tuple(round(factor * self.rpm * 100) for factor in DIRECTIONS[self.direction]) if self.direction else (0, 0)
+        rpm = min(self.rpm, IN_PLACE_RPM_LIMIT) if self.direction in ('a', 'd') else self.rpm
+        desired = tuple(round(factor * rpm * 100) for factor in DIRECTIONS[self.direction]) if self.direction else (0, 0)
         changed = desired != self.active
         if not self.engaged and not any(desired):
             return
@@ -297,7 +299,9 @@ def render(controller):
          f'PWM {controller.pwm}/999 (110..{controller.max_pwm})'),
         ('Encoder feedback controls each wheel independently.' if controller.pid_settings else
          f'No-load estimate: {controller.pwm * NO_LOAD_RPM / 999:.1f} RPM (12 V); measured RPM below'),
-        'Arrows: forward/backward/turn. A/D turns are in place.',
+        ('Arrows: forward/backward/turn. A/D in-place limit: '
+         f'{IN_PLACE_RPM_LIMIT:g} RPM (or lower selected speed).' if controller.pid_settings else
+         'Arrows: forward/backward/turn. A/D turns are in place.'),
         (f'State: {controller.status} | target L={controller.active[0]/100:+.1f} R={controller.active[1]/100:+.1f} RPM'
          if controller.pid_settings else
          f'State: {controller.status} | command L={controller.active[0]:+d} R={controller.active[1]:+d}'),
