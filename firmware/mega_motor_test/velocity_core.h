@@ -14,6 +14,7 @@ struct VelocityControl {
     uint16_t kpCenti=0, speedCenti=0, pwm=0, deadband=2, maxError=0, maxMs=0, saturationMs=0;
   } hold[2];
   Gains gains[2][2], zeroGains[2], holdGains[2];
+  uint16_t holdPositionKpQ8[2]={0,0};
   const int8_t encoderSign[2];
   explicit VelocityControl(int8_t left=1, int8_t right=1) : encoderSign{left,right} {}
   bool active=false, seeded=false;
@@ -66,13 +67,17 @@ struct VelocityControl {
     scaled(zeroGains[c],kp,ki,0,0,0); brakeLimit[c]=pwm; return true;
   }
   bool configureHoldPI(uint8_t c,int32_t kp,int32_t ki) {
-    if(active||c>1||kp<1||kp>20000||ki<0||ki>50000) return false;
+    if(active||c>1||kp<1||kp>60000||ki<0||ki>50000) return false;
     scaled(holdGains[c],kp,ki,0,0,0); return true;
+  }
+  bool configureHoldPosition(uint8_t c,int32_t kpMilli) {
+    if(active||c>1||kpMilli<0||kpMilli>30000) return false;
+    holdPositionKpQ8[c]=(kpMilli*256L+500)/1000; return true;
   }
   bool configureHold(uint8_t c,bool enabled,uint16_t kp,uint16_t speed,uint16_t pwm,uint16_t deadband,
                      uint16_t maxError,uint16_t maxMs,uint16_t saturationMs) {
     if(active||c>1||deadband>20) return false;
-    if(enabled&&(!kp||kp>1000||!speed||speed>500||!pwm||pwm>150||maxError<=deadband||maxError>2652||
+    if(enabled&&(!kp||kp>1000||!speed||speed>500||!pwm||pwm>MAX_PWM||maxError<=deadband||maxError>2652||
                  (maxMs&&maxMs<100)||maxMs>60000||saturationMs<100||saturationMs>5000||
                  !holdGains[c].configured)) return false;
     HoldConfig& h=hold[c]; h.enabled=enabled; h.kpCenti=kp; h.speedCenti=speed; h.pwm=pwm;
@@ -204,11 +209,25 @@ struct VelocityControl {
         derivativeRemainder[i]=n-change*512;
         derivative[i]=clip(derivative[i]+change,-200000L,200000L); dTerm=g.kd*derivative[i];
       }
-      const int32_t base=(zero?0:feedforward[i])+shift<1>(g.kp*error)-dTerm;
+      // High HOLD stiffness must not overflow at a fast externally imposed
+      // encoder velocity. 60 PWM/RPM * 100 RPM is already far beyond the
+      // actuator cap; clip only this P operand, preserving its sign and the I
+      // error. Driving and zero-speed braking arithmetic remain unchanged.
+      const int32_t pError=state[i]==HOLD?clip(error,-100*256L,100*256L):error;
+      int32_t base=(zero?0:feedforward[i])+shift<1>(g.kp*pError)-dTerm;
+      if(state[i]==HOLD) {
+        const int32_t e=positionError[i];
+        if(e>hold[i].deadband||e < -static_cast<int32_t>(hold[i].deadband)) {
+          // Position stiffness is independent of velocity damping. Bound the
+          // Q8 product before Q16 conversion (2652 counts * 30 PWM/count).
+          const int32_t positionQ8=clip(e*holdPositionKpQ8[i],-MAX_PWM*256L,MAX_PWM*256L);
+          base+=positionQ8*256L;
+        }
+      }
       int16_t limit=state[i]==HOLD?hold[i].pwm:zero?brakeLimit[i]:MAX_PWM;
       // Torque-producing polarity opposing measured motion uses the brake cap,
       // including commanded reversals and overspeed at a nonzero target.
-      if(sign(base+integral[i])*sign(fastQ16[i])<0&&limit>brakeLimit[i]) limit=brakeLimit[i];
+      if(state[i]!=HOLD&&sign(base+integral[i])*sign(fastQ16[i])<0&&limit>brakeLimit[i]) limit=brakeLimit[i];
       const int32_t bound=static_cast<int32_t>(limit)*65536L;
       const int32_t iNumerator=g.ki*error+integralRemainder[i];
       const int32_t iIncrement=shift<10>(iNumerator);

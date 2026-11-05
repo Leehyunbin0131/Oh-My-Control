@@ -76,7 +76,7 @@ class PIDSettings:
         self.hold = document.get('hold', {})
         if type(self.hold.get('enabled')) is not bool:
             raise ValueError('위치 유지 enabled 설정이 필요합니다.')
-        limits = (('kp_rpm_per_count', .01, 10), ('max_rpm', .01, 5), ('pwm_limit', 1, 150),
+        limits = (('kp_rpm_per_count', .01, 10), ('max_rpm', .01, 5), ('pwm_limit', 1, 650),
                   ('deadband_counts', 0, 20), ('max_error_counts', 1, 2652),
                   ('max_duration_ms', 0, 60000), ('saturation_ms', 100, 5000))
         for key, lo, hi in limits:
@@ -91,10 +91,14 @@ class PIDSettings:
             raise ValueError('위치 유지 시간은 0(명령 유효기간으로 관리) 또는 100..60000 ms입니다.')
         if self.hold['enabled']:
             # Commissioning is allowed without claiming on-hardware validation.
-            for key, lo, hi in (('velocity_kp', .001, 20), ('velocity_ki', 0, 50)):
+            for key, lo, hi in (('velocity_kp', .001, 60), ('velocity_ki', 0, 50)):
                 value = self.hold.get(key)
                 if type(value) not in (int, float) or not math.isfinite(value) or not lo <= value <= hi:
                     raise ValueError(f'위치 유지 속도 PI 설정 오류: {key}')
+        position_kp = self.hold.get('position_kp_pwm_per_count', 0)
+        if (type(position_kp) not in (int, float) or not math.isfinite(position_kp)
+                or not 0 <= position_kp <= 30):
+            raise ValueError('위치 유지 직접 P 설정 오류: position_kp_pwm_per_count')
 
     @classmethod
     def load(cls, path, calibration, **kwargs):
@@ -107,6 +111,10 @@ class PIDSettings:
             raise MotorError(f'보정 파일의 {self.period_ms} ms 주기와 메가 PID 펌웨어 설정이 일치해야 합니다.')
         if self.hold['enabled'] and not client.info.get('hold_servo_supported'):
             raise MotorError('정지 유지용 새 메가 펌웨어가 필요합니다. 모터 전원을 끄고 ./mega_firmware.sh upload로 갱신하세요.')
+        if (self.hold['enabled'] and (self.hold['velocity_kp'] > 20 or self.hold['pwm_limit'] > 150
+                                     or self.hold.get('position_kp_pwm_per_count', 0) > 0)
+                and not client.info.get('extended_hold_supported')):
+            raise MotorError('강한 위치 유지용 새 메가 펌웨어가 필요합니다. 모터 전원을 끄고 ./mega_firmware.sh upload로 갱신하세요.')
         expected_signs = [None, None]
         for spec in self.calibration.wheels.values():
             expected_signs[0 if spec['driver_channel'] == 'L' else 1] = (
@@ -128,6 +136,10 @@ class PIDSettings:
             h = self.hold
             if h['enabled']:
                 client.command('HOLD_PI', channel, round(h['velocity_kp'] * 1000), round(h['velocity_ki'] * 1000))
+            if client.info.get('extended_hold_supported'):
+                # Also clear a prior direct position term for a profile that
+                # omits it; disarm alone intentionally preserves other gains.
+                client.command('HOLD_POS', channel, round(h.get('position_kp_pwm_per_count', 0) * 1000))
             client.command('HOLD', channel, int(h['enabled']), round(h['kp_rpm_per_count'] * 100),
                            round(h['max_rpm'] * 100), h['pwm_limit'], h['deadband_counts'],
                            h['max_error_counts'], h['max_duration_ms'], h['saturation_ms'])

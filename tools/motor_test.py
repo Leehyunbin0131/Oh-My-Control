@@ -82,7 +82,7 @@ def parse_info(fields):
             (version >= 6 and any(sign not in (-1, 1) for sign in values[19:21])) or
             (version == 7 and (values[21:23] not in ([0, 0], [150, 60]) or
                               (values[21] and (values[9] != 1 or values[17] != 400000)))) or
-            (version == 8 and (values[21:24] != [0, 0, 1] or values[24] not in (7, 15)))):
+            (version == 8 and (values[21:24] != [0, 0, 1] or values[24] not in (7, 15, 31)))):
         raise MotorError('펌웨어 버전·엔코더 핀·구동 제한이 이 검사 코드와 다릅니다.')
     if values[9] not in LINKS or not 1 <= values[10] <= 127:
         raise MotorError('잘못된 모터드라이버 설정')
@@ -103,6 +103,7 @@ def parse_info(fields):
             'max_brake_ms': values[22] if version >= 7 else 0,
             'stream_supported': version == 8, 'hold_supported': version == 8,
             'hold_servo_supported': version == 8 and bool(values[24] & 8),
+            'extended_hold_supported': version == 8 and bool(values[24] & 16),
             'control_model': CONTROL_MODEL if version == 8 else 'legacy_unsigned_pwm'}
 
 
@@ -342,6 +343,8 @@ class MotorClient:
                     self.acks[int(fields[2])] = fields[3:]
                     if self.identified and fields[3] != 'OK':
                         rejected = f'메가 명령 거부: {fields[4]}'
+                        if fields[4] == 'hold_limit':
+                            rejected += ' (fault 10: 정지 유지 위치 이탈 또는 연속 출력 포화 한도)'
                     while len(self.acks) > 32:
                         del self.acks[next(iter(self.acks))]
                 elif fields[1] == 'D' and len(fields) == 6:

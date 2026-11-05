@@ -309,7 +309,9 @@ def render(controller):
     if controller.pid_settings:
         if controller.pid_settings.hold['enabled']:
             verified = controller.pid_settings.document.get('validation_status', {}).get('holding') is True
-            lines.append('Position HOLD enabled' + ('' if verified else ' / user test pending') +
+            manual_confirmed = controller.pid_settings.document.get('hold_validation', {}).get('status') == 'user_confirmed_manual_hold'
+            hold_status = '' if verified else (' / manual hold confirmed' if manual_confirmed else ' / user test pending')
+            lines.append('Position HOLD enabled' + hold_status +
                          ' | S keeps zero target active; Ctrl+C releases output.')
         timing = getattr(controller.client, 'timing', None)
         if timing and timing.get('measured_control_hz') is not None:

@@ -23,7 +23,8 @@ void testHoldProtocol() {
   assert(motion.fault==BAD_COMMAND&&!velocity.hold[0].enabled);
   tick(110); command(nextSeq(),"CLEAR_FAULT");
   for(const char* invalid : {"HOLD_PI,2,8000,10000", "HOLD_PI,0,0,10000",
-                             "HOLD_PI,0,8000,50001", "HOLD_PI,0,8000,10000,"}) {
+                             "HOLD_PI,0,8000,50001", "HOLD_PI,0,8000,10000,",
+                             "HOLD_POS,2,18000", "HOLD_POS,0,-1", "HOLD_POS,0,30001"}) {
     command(nextSeq(),invalid); assert(motion.fault==BAD_COMMAND&&!motion.armed);
     tick(110); command(nextSeq(),"CLEAR_FAULT");
   }
@@ -66,6 +67,22 @@ void testHoldProtocol() {
   command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,0,0,300"); tick(120);
   command(nextSeq(),"STOP"); tick();
   assert(!motion.armed&&!velocity.active&&!velocity.output[0]&&!velocity.output[1]);
+  // The strong HOLD parameters are accepted by the production parser. Effort
+  // opposing an external encoder displacement uses HOLD's own output cap.
+  for(unsigned i=0;i<2;++i) {
+    command(nextSeq(),"HOLD_PI,"+std::to_string(i)+",8000,0");
+    command(nextSeq(),"HOLD_POS,"+std::to_string(i)+",18000");
+    command(nextSeq(),"HOLD,"+std::to_string(i)+",1,25,500,350,1,100,0,1000");
+  }
+  command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,0,0,300"); tick(120);
+  encR.count+=8; tick();
+  assert(velocity.output[0]<-150&&velocity.output[0]>=-350);
+  for(unsigned i=0;i<7&&!motion.fault;++i) { encR.count+=16; tick(); }
+  assert(motion.fault==HOLD_LIMIT&&!controlEnabled);
+  command(nextSeq(),"SET_SPEED,0,0,300");
+  while(txHead!=txTail) drainSerial();
+  assert(Serial.output.find(",ERR,hold_limit*")!=std::string::npos);
+  command(nextSeq(),"STOP"); tick(110); command(nextSeq(),"CLEAR_FAULT");
   for(unsigned i=0;i<2;++i)
     command(nextSeq(),"HOLD,"+std::to_string(i)+",0,25,500,120,2,100,10000,1000");
   encL.count=encR.count=0; tick(500); // reset idle estimator before baseline tests
@@ -174,7 +191,7 @@ int main() {
   encL.invalid=encR.invalid=0xffffffffUL;
   sendInfo(); sendTelemetry(); sendControlState();
   while(txHead!=txTail) drainSerial();
-  assert(Serial.output.find(",0,0,1,15*")!=std::string::npos);
+  assert(Serial.output.find(",0,0,1,31*")!=std::string::npos);
   std::size_t start=0;
   while(start<Serial.output.size()) {
     auto end=Serial.output.find('\n',start); assert(end!=std::string::npos);

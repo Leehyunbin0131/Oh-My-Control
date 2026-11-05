@@ -16,11 +16,13 @@ struct Plant {
   uint32_t counts[2]={0xfffffffcUL,4}, invalid[2]={0,0}, t=0;
   double rpm[2]={0,0}, position[2]={-4,4};
   double friction[2]={45,25}, slope[2]={6.5,6.1}, tau[2]={.12,.18};
+  double externalPwm[2]={0,0}; // equivalent externally applied wheel torque
   Plant() { configure(v); }
   uint8_t step() {
     for(int i=0;i<2;++i) {
-      double driven=std::fmax(0,(std::abs(v.output[i])-friction[i])/slope[i]);
-      if(v.output[i]<0) driven=-driven;
+      const double effort=v.output[i]+externalPwm[i];
+      double driven=std::fmax(0,(std::abs(effort)-friction[i])/slope[i]);
+      if(effort<0) driven=-driven;
       rpm[i]+=.001/tau[i]*(driven-rpm[i]);
       position[i]+=rpm[i]*2652/60000*(i?-1:1);
       counts[i]=static_cast<uint32_t>(static_cast<int32_t>(std::round(position[i])));
@@ -48,6 +50,11 @@ int main() {
   assert(!limits.configureHoldPI(0,0,10000));
   assert(!limits.configureHoldPI(0,8000,50001));
   assert(limits.configureHoldPI(0,8000,10000));
+  assert(!limits.configureHoldPI(0,60001,10000));
+  assert(!limits.configureHoldPosition(2,18000));
+  assert(!limits.configureHoldPosition(0,-1));
+  assert(!limits.configureHoldPosition(0,30001));
+  assert(!limits.configureHold(0,true,100,500,651,1,100,0,1000));
   assert(!limits.configureHold(0,true,25,500,120,2,100,1,1000));
   for(int sign:{-1,1}) {
     Plant p; p.v.start(sign*7200,sign*7200,p.counts,p.invalid,p.t);
@@ -98,6 +105,56 @@ int main() {
   h.run(400); assert(h.rpm[0]>20);
   assert(h.v.holdReference[1]==heldRight);
   h.v.stop(); assert(!h.v.active&&!h.v.output[0]&&!h.v.output[1]);
+
+  // A static disturbance above the old 120 PWM cap must be resisted promptly,
+  // without changing driving/braking gains. Both encoder polarities are used.
+  for(int direction:{-1,1}) {
+    Plant strong;
+    for(int i=0;i<2;++i) {
+      assert(strong.v.configureHoldPI(i,8000,0));
+      assert(strong.v.configureHoldPosition(i,18000));
+      assert(strong.v.configureHold(i,true,25,500,350,1,100,0,1000));
+    }
+    strong.v.start(0,0,strong.counts,strong.invalid,0); strong.run(200);
+    const uint32_t origin[2]={strong.v.holdReference[0],strong.v.holdReference[1]};
+    strong.externalPwm[0]=direction*200; strong.externalPwm[1]=-direction*200;
+    int maxError=0, maxEffort=0;
+    for(int t=0;t<1500;++t) {
+      strong.run(1);
+      for(int i=0;i<2;++i) {
+        const int e=std::abs(VelocityControl::delta(strong.counts[i],origin[i]));
+        if(e>maxError) maxError=e;
+        if(std::abs(strong.v.output[i])>maxEffort) maxEffort=std::abs(strong.v.output[i]);
+        assert(std::abs(strong.v.output[i])<=350);
+        assert(strong.v.holdReference[i]==origin[i]);
+      }
+    }
+    assert(maxError<20&&maxEffort>150); // explicitly exercises effort beyond brake cap
+    strong.externalPwm[0]=strong.externalPwm[1]=0; strong.run(5000);
+    for(int i=0;i<2;++i) {
+      assert(std::abs(VelocityControl::delta(strong.counts[i],origin[i]))<=3);
+      assert(std::abs(strong.rpm[i])<.1);
+      assert(strong.v.integral[i]==0);
+      assert(strong.v.brakeLimit[i]==150&&strong.v.zeroGains[i].ki==0);
+    }
+    strong.v.setTargets(3000,0,strong.t);
+    assert(strong.v.integral[0]==0); strong.run(500);
+    assert(strong.rpm[0]>20&&strong.v.state[1]==VelocityControl::HOLD);
+  }
+  // Kp60 remains signed and bounded under fast imposed encoder movement.
+  // Run with UBSan on host: the formerly unchecked P product could overflow.
+  for(int direction:{-1,1}) {
+    VelocityControl v; configure(v); uint32_t c[2]={0,0}, b[2]={0,0};
+    assert(v.configureHoldPI(0,60000,50000));
+    assert(v.configureHoldPosition(0,30000));
+    assert(v.configureHold(0,true,100,500,350,1,2652,0,1000));
+    v.start(0,0,c,b,0);
+    for(int t=1;t<150;++t) assert(!v.update(c,b,t));
+    for(int t=150;t<200;++t) {
+      c[0]+=direction*16; assert(!v.update(c,b,t));
+      assert(v.output[0]*direction<0&&std::abs(v.output[0])<=350);
+    }
+  }
 
   // Small displacements across uint32 encoder rollover retain their direction.
   for(int sign:{-1,1}) {

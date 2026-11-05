@@ -60,6 +60,48 @@ class PIDTests(unittest.TestCase):
         for feature in (0, 8, 23):
             with self.assertRaises(MotorError): firmware_info(features=feature)
 
+    def test_strong_hold_requires_new_capability_before_sending_any_config(self):
+        calibration = DriveCalibration(direction_document())
+        doc = pid_document(calibration)
+        doc['hold'].update(enabled=True, velocity_kp=8, velocity_ki=0, kp_rpm_per_count=.25,
+                           position_kp_pwm_per_count=18,
+                           pwm_limit=350, deadband_counts=1, max_duration_ms=0)
+        settings = PIDSettings(doc, calibration)
+        calls = []
+        client = SimpleNamespace(info=firmware_info(features=15),
+                                 latest={'armed':False,'command_pwm':[0,0]},
+                                 command=lambda *args:calls.append(args))
+        with self.assertRaisesRegex(MotorError,'강한 위치 유지'):
+            settings.configure(client)
+        self.assertEqual(calls,[])
+        client.info=firmware_info(features=31)
+        settings.configure(client)
+        self.assertIn(('HOLD_PI',0,8000,0),calls)
+        self.assertIn(('HOLD_POS',0,18000),calls)
+        self.assertIn(('HOLD',0,1,25,500,350,1,100,0,1000),calls)
+        self.assertIn(('ZERO',0,2000,0,150),calls)
+        for key,value in [('velocity_kp',60.001),('pwm_limit',651),
+                          ('position_kp_pwm_per_count',30.001),('position_kp_pwm_per_count',float('nan'))]:
+            bad=copy.deepcopy(doc); bad['hold'][key]=value
+            with self.assertRaises(ValueError): PIDSettings(bad,calibration)
+        # Reusing the serial session with a legacy profile clears the extra P.
+        legacy=PIDSettings(pid_document(calibration),calibration)
+        calls.clear(); legacy.configure(client)
+        self.assertIn(('HOLD_POS',0,0),calls)
+        self.assertIn(('HOLD_POS',1,0),calls)
+
+    def test_current_hold_profile_with_delayed_actuator_and_external_load(self):
+        root=Path(__file__).resolve().parents[1]
+        hold=json.loads((root/'config/motor_pid.json').read_text())['hold']
+        with tempfile.TemporaryDirectory() as directory:
+            binary=str(Path(directory)/'hold_delay')
+            subprocess.run(['g++','-std=c++11','-O2','-fsanitize=undefined','-fno-sanitize-recover=all',
+                            str(root/'tests/hold_delay_test.cpp'),'-o',binary],check=True)
+            values=[round(hold['velocity_kp']*1000),round(hold['velocity_ki']*1000),
+                    round(hold.get('position_kp_pwm_per_count',0)*1000),
+                    round(hold['kp_rpm_per_count']*100),hold['pwm_limit'],hold['deadband_counts']]
+            subprocess.run([binary,*map(str,values)],check=True,timeout=30)
+
     def test_ros_boundary_uses_physical_forward_and_measured_encoder_position(self):
         calibration = DriveCalibration(direction_document(right_motor_reversed=True))
         settings = PIDSettings(pid_document(calibration), calibration)

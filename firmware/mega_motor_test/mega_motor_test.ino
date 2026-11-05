@@ -216,7 +216,7 @@ void sendIdentity() {
   info.positive(driverClock); info.positive(1000000UL / outputPeriodUs);
   info.number(PID_ENCODER_SIGN_L); info.number(PID_ENCODER_SIGN_R);
   info.positive(0); info.positive(0); // old BRAKE unsupported
-  info.positive(1); info.positive(15); // signed_pwm_v1; stream | zero | hold | independent hold PI / no duration cap
+  info.positive(1); info.positive(31); // signed_pwm_v1; stream | zero | hold | hold PI | extended hold effort
   info.send();
 }
 
@@ -389,9 +389,14 @@ void parseCommand(char* line) {
   } else if (size == 7 && !strcmp(fields[3], "HOLD_PI")) {
     long c, kp, ki;
     accepted = !motion.armed && !motion.fault && parseNumber(fields[4], 0, 1, c) &&
-      parseNumber(fields[5], 1, 20000, kp) && parseNumber(fields[6], 0, 50000, ki) &&
+      parseNumber(fields[5], 1, 60000, kp) && parseNumber(fields[6], 0, 50000, ki) &&
       velocity.configureHoldPI(c, kp, ki);
     reason = "hold_pi_config";
+  } else if (size == 6 && !strcmp(fields[3], "HOLD_POS")) {
+    long c, kp;
+    accepted = !motion.armed && !motion.fault && parseNumber(fields[4], 0, 1, c) &&
+      parseNumber(fields[5], 0, 30000, kp) && velocity.configureHoldPosition(c, kp);
+    reason = "hold_position_config";
   } else if (size == 13 && !strcmp(fields[3], "HOLD")) {
     long v[9];
     accepted = !motion.armed && !motion.fault;
@@ -430,6 +435,9 @@ void parseCommand(char* line) {
     reason = "run";
   }
   if (!accepted && motion.fault == OK) stopMotors(BAD_COMMAND);
+  // Preserve the actual hold-limit reason even if the next 20 Hz telemetry
+  // frame has not reached the host when a streamed target gets rejected.
+  if (!accepted && motion.fault == HOLD_LIMIT) reason = "hold_limit";
   acknowledge(seq, accepted, reason);
 }
 
