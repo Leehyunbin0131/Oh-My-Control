@@ -92,7 +92,7 @@ class MegaSimulator:
                         ok = True
                         if command == 'CLEAR_FAULT':
                             self.fault = 0
-                        elif command in ('ZERO', 'HOLD'):
+                        elif command in ('ZERO', 'HOLD', 'HOLD_PI'):
                             ok = self.protocol == 8 and not self.armed
                         elif command == 'BRAKE' and self.protocol == 7:
                             driven = any(self.pwm) and self.armed
@@ -158,7 +158,7 @@ class MegaSimulator:
                     if self.protocol == 7:
                         extra += ',150,60' if self.link == 1 else ',0,0'
                     if self.protocol == 8:
-                        extra += ',0,0,1,7'
+                        extra += ',0,0,1,15'
                     self.send(f'OMR1,I,{self.protocol},40,41,50,51,20000,300,1500,250,{self.link},1,30000{extra}')
                     self.send(f'OMR1,D,{int(now * 1000) & 0xffffffff},{(int(now * 1000) * 20) & 0xffffffff},0,0')
                 last_i = now

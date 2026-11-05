@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "updated_at": "2026-11-05T10:29:45.201907+00:00",
+  "enabled_for_navigation": false,
+  "sensors": {
+    "imu": {
+      "model": "HFI-A9",
+      "identity": "usb-Silicon_Labs_HandsFree_IMU_USB_to_UART_Bridge_Controller_0001-if00-port0",
+      "coordinate_frame": "hfi_a9_packet_xyz",
+      "gyro_units": "rad/s",
+      "method": "stationary_residual_gyro_bias",
+      "gyro_bias_rad_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "estimated_gyro_bias_rad_s": [
+        -4.7383894022105455e-05,
+        2.66771033114078e-06,
+        -1.9743024040253556e-05
+      ],
+      "additional_correction_recommended": false,
+      "correction_decision": "keep_existing_output; no verified improvement from additional subtraction",
+      "correction": "gyro_corrected = gyro_input - gyro_bias_rad_s (same sensor axes)",
+      "input_processing": "HFI packet values",
+      "gravity_reference_m_s2": [
+        0.3584470411262991,
+        -0.014850306620738066,
+        -10.26211543788738
+      ],
+      "gyro_sample_covariance_rad2_s2": [
+        [
+          3.0486647160634182e-06,
+          -6.97727067653209e-08,
+          -2.723568801103547e-08
+        ],
+        [
+          -6.97727067653209e-08,
+          3.2437906919770648e-06,
+          -4.07338349800902e-08
+        ],
+        [
+          -2.723568801103547e-08,
+          -4.07338349800902e-08,
+          2.5802979081920598e-06
+        ]
+      ],
+      "validation": {
+        "stationary": true,
+        "independent_following_window": true,
+        "candidate_mean_residual_rad_s": [
+          2.580869667161797e-05,
+          3.7977303344019634e-05,
+          5.064205084108851e-05
+        ],
+        "selected_mean_residual_rad_s": [
+          -2.1575197350487487e-05,
+          4.064501367516041e-05,
+          3.089902680083495e-05
+        ],
+        "rms_before_rad_s": 0.0029665099475592884,
+        "candidate_rms_after_rad_s": 0.0029667797347528438,
+        "selected_rms_after_rad_s": 0.0029665099475592884,
+        "min_mean_bias_reduction_for_selection": 0.2,
+        "dynamic": false,
+        "temperature_range": false,
+        "power_cycle": false
+      },
+      "accelerometer_calibrated": false,
+      "magnetometer_calibrated": false,
+      "mounting_transform_calibrated": false,
+      "orientation_output_corrected": false,
+      "device_calibration_written": false,
+      "enabled_for_navigation": false,
+      "report": "reports/imu_calibration_20261105_192335_778415/summary.json"
+    },
+    "camera": {
+      "model": "Intel RealSense D435IF",
+      "identity": "262522074474",
+      "coordinate_frame": "realsense_sdk_motion_xyz",
+      "gyro_units": "rad/s",
+      "method": "stationary_residual_gyro_bias",
+      "gyro_bias_rad_s": [
+        -0.004468377334157023,
+        -0.0017854584044892942,
+        -0.0001467457623802185
+      ],
+      "estimated_gyro_bias_rad_s": [
+        -0.004468377334157023,
+        -0.0017854584044892942,
+        -0.0001467457623802185
+      ],
+      "additional_correction_recommended": true,
+      "correction_decision": "subtract_estimated_bias",
+      "correction": "gyro_corrected = gyro_input - gyro_bias_rad_s (same sensor axes)",
+      "input_processing": {
+        "sdk": "2.58.1",
+        "firmware": "5.17.3.10",
+        "motion_correction_enabled": 1,
+        "gyro_intrinsics": {
+          "data": [
+            [
+              1,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              1,
+              0
+            ]
+          ],
+          "noise_variances": [
+            0,
+            0,
+            0
+          ],
+          "bias_variances": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "gravity_reference_m_s2": [
+        0.027142913567883932,
+        -9.707419241938467,
+        -0.19321417111372124
+      ],
+      "gyro_sample_covariance_rad2_s2": [
+        [
+          4.173380028590367e-06,
+          2.835659399485593e-07,
+          3.3256128834534674e-07
+        ],
+        [
+          2.835659399485593e-07,
+          6.860010673440665e-06,
+          -9.677543214222316e-07
+        ],
+        [
+          3.3256128834534674e-07,
+          -9.677543214222316e-07,
+          3.77619635697041e-06
+        ]
+      ],
+      "validation": {
+        "stationary": true,
+        "independent_following_window": true,
+        "candidate_mean_residual_rad_s": [
+          -6.546692143188232e-05,
+          1.0318058822445441e-05,
+          3.529153698389943e-05
+        ],
+        "selected_mean_residual_rad_s": [
+          -6.546692143188232e-05,
+          1.0318058822445441e-05,
+          3.529153698389943e-05
+        ],
+        "rms_before_rad_s": 0.006199278848795316,
+        "candidate_rms_after_rad_s": 0.0038363272921811266,
+        "selected_rms_after_rad_s": 0.0038363272921811266,
+        "min_mean_bias_reduction_for_selection": 0.2,
+        "dynamic": false,
+        "temperature_range": false,
+        "power_cycle": false
+      },
+      "accelerometer_calibrated": false,
+      "magnetometer_calibrated": false,
+      "mounting_transform_calibrated": false,
+      "orientation_output_corrected": false,
+      "device_calibration_written": false,
+      "enabled_for_navigation": false,
+      "report": "reports/imu_calibration_20261105_192335_778415/summary.json"
+    }
+  }
+}

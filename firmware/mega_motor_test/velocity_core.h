@@ -13,7 +13,7 @@ struct VelocityControl {
     bool enabled=false;
     uint16_t kpCenti=0, speedCenti=0, pwm=0, deadband=2, maxError=0, maxMs=0, saturationMs=0;
   } hold[2];
-  Gains gains[2][2], zeroGains[2];
+  Gains gains[2][2], zeroGains[2], holdGains[2];
   const int8_t encoderSign[2];
   explicit VelocityControl(int8_t left=1, int8_t right=1) : encoderSign{left,right} {}
   bool active=false, seeded=false;
@@ -65,17 +65,24 @@ struct VelocityControl {
     if(active||c>1||kp<1||kp>20000||ki<0||ki>50000||pwm<1||pwm>150) return false;
     scaled(zeroGains[c],kp,ki,0,0,0); brakeLimit[c]=pwm; return true;
   }
+  bool configureHoldPI(uint8_t c,int32_t kp,int32_t ki) {
+    if(active||c>1||kp<1||kp>20000||ki<0||ki>50000) return false;
+    scaled(holdGains[c],kp,ki,0,0,0); return true;
+  }
   bool configureHold(uint8_t c,bool enabled,uint16_t kp,uint16_t speed,uint16_t pwm,uint16_t deadband,
                      uint16_t maxError,uint16_t maxMs,uint16_t saturationMs) {
     if(active||c>1||deadband>20) return false;
     if(enabled&&(!kp||kp>1000||!speed||speed>500||!pwm||pwm>150||maxError<=deadband||maxError>2652||
-                 maxMs<100||maxMs>60000||saturationMs<100||saturationMs>5000)) return false;
+                 (maxMs&&maxMs<100)||maxMs>60000||saturationMs<100||saturationMs>5000||
+                 !holdGains[c].configured)) return false;
     HoldConfig& h=hold[c]; h.enabled=enabled; h.kpCenti=kp; h.speedCenti=speed; h.pwm=pwm;
     h.deadband=deadband; h.maxError=maxError; h.maxMs=maxMs; h.saturationMs=saturationMs; return true;
   }
   bool ready(int16_t l,int16_t r) const {
     if(l < -MAX_RPM_CENTI||l>MAX_RPM_CENTI||r < -MAX_RPM_CENTI||r>MAX_RPM_CENTI) return false;
-    for(uint8_t i=0;i<2;++i) if(!gains[i][0].configured||!gains[i][1].configured||!zeroGains[i].configured) return false;
+    for(uint8_t i=0;i<2;++i)
+      if(!gains[i][0].configured||!gains[i][1].configured||!zeroGains[i].configured||
+         (hold[i].enabled&&!holdGains[i].configured)) return false;
     return true;
   }
   void clearIntegral(uint8_t i) { integral[i]=integralRemainder[i]=0; }
@@ -159,7 +166,7 @@ struct VelocityControl {
       if(zero) {
         // First reverse edge: discard stale forward velocity instead of
         // continuing to apply the old braking polarity into reverse motion.
-        if(steps&&sign(steps)*sign(fastBefore)<0&&sign(output[i])==sign(steps)) {
+        if(state[i]!=HOLD&&steps&&sign(steps)*sign(fastBefore)<0&&sign(output[i])==sign(steps)) {
           fastQ16[i]=0; clearIntegral(i);
         }
         if(static_cast<uint32_t>(now-lastEdge[i])>=8) fastQ16[i]=0;
@@ -179,7 +186,7 @@ struct VelocityControl {
           const HoldConfig& h=hold[i];
           const int32_t rawError=delta(holdReference[i],counts[i]);
           if(rawError > h.maxError||rawError < -static_cast<int32_t>(h.maxError)||
-             static_cast<uint32_t>(now-holdStarted[i])>=h.maxMs) return 10;
+             (h.maxMs&&static_cast<uint32_t>(now-holdStarted[i])>=h.maxMs)) return 10;
           positionError[i]=rawError*encoderSign[i];
           const int32_t e=positionError[i];
           const int32_t correction=(e>h.deadband||e < -static_cast<int32_t>(h.deadband))?
@@ -188,7 +195,7 @@ struct VelocityControl {
         }
         if(!desired&&measured==0) clearIntegral(i);
       }
-      const Gains& g=zero?zeroGains[i]:gains[i][target[i]>0];
+      const Gains& g=state[i]==HOLD?holdGains[i]:zero?zeroGains[i]:gains[i][target[i]>0];
       const int32_t error=desired-shift<8>(measured);
       int32_t dTerm=0;
       if(!zero&&g.kd) {

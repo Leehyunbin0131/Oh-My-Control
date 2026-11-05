@@ -307,6 +307,10 @@ def render(controller):
          f'State: {controller.status} | command L={controller.active[0]:+d} R={controller.active[1]:+d}'),
     ]
     if controller.pid_settings:
+        if controller.pid_settings.hold['enabled']:
+            verified = controller.pid_settings.document.get('validation_status', {}).get('holding') is True
+            lines.append('Position HOLD enabled' + ('' if verified else ' / user test pending') +
+                         ' | S keeps zero target active; Ctrl+C releases output.')
         timing = getattr(controller.client, 'timing', None)
         if timing and timing.get('measured_control_hz') is not None:
             lines.append(f'Loop measured {timing["measured_control_hz"]:.1f} Hz | max compute {timing["compute_max_us"]} us | missed {timing["missed_ticks"]}')
@@ -317,7 +321,8 @@ def render(controller):
             index = 0 if controller.client.calibration.wheels[name]['driver_channel'] == 'L' else 1
             label = state['wheel_states'][index] if state else 'WAIT'
             lines.append(f'{name.upper():5} {label:10} target {wheel["target_rpm"]:+6.1f} | '
-                         f'actual {wheel["rpm"]:+6.1f} RPM | PWM {wheel["pwm"]:+4d}')
+                         f'actual {wheel["rpm"]:+6.1f} RPM | PWM {wheel["pwm"]:+4d}' +
+                         (f' | hold error {abs(state["position_error"][index])} counts' if label == 'HOLD' else ''))
         return '\x1b[H' + '\n'.join('\x1b[2K' + line for line in lines) + '\x1b[J'
     lines.append('Diagnostic PWM: STOP disables output; measured overspeed guard at 100 RPM')
     for name in ('left', 'right'):

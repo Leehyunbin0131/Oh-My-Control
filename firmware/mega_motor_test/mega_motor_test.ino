@@ -216,7 +216,7 @@ void sendIdentity() {
   info.positive(driverClock); info.positive(1000000UL / outputPeriodUs);
   info.number(PID_ENCODER_SIGN_L); info.number(PID_ENCODER_SIGN_R);
   info.positive(0); info.positive(0); // old BRAKE unsupported
-  info.positive(1); info.positive(7); // signed_pwm_v1; streaming | zero servo | conditional hold
+  info.positive(1); info.positive(15); // signed_pwm_v1; stream | zero | hold | independent hold PI / no duration cap
   info.send();
 }
 
@@ -386,6 +386,12 @@ void parseCommand(char* line) {
       parseNumber(fields[5], 1, 20000, kp) && parseNumber(fields[6], 0, 50000, ki) &&
       parseNumber(fields[7], 1, 150, pwm) && velocity.configureZero(c, kp, ki, pwm);
     reason = "zero_config";
+  } else if (size == 7 && !strcmp(fields[3], "HOLD_PI")) {
+    long c, kp, ki;
+    accepted = !motion.armed && !motion.fault && parseNumber(fields[4], 0, 1, c) &&
+      parseNumber(fields[5], 1, 20000, kp) && parseNumber(fields[6], 0, 50000, ki) &&
+      velocity.configureHoldPI(c, kp, ki);
+    reason = "hold_pi_config";
   } else if (size == 13 && !strcmp(fields[3], "HOLD")) {
     long v[9];
     accepted = !motion.armed && !motion.fault;

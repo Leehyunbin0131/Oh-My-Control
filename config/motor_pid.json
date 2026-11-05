@@ -27,14 +27,16 @@
     }
   },
   "hold": {
-    "enabled": false,
+    "enabled": true,
     "kp_rpm_per_count": 0.25,
     "max_rpm": 5,
     "pwm_limit": 120,
     "deadband_counts": 2,
     "max_error_counts": 100,
-    "max_duration_ms": 10000,
-    "saturation_ms": 1000
+    "max_duration_ms": 0,
+    "saturation_ms": 1000,
+    "velocity_kp": 8.0,
+    "velocity_ki": 10.0
   },
   "wheel_mapping": {
     "left": {
@@ -1049,5 +1051,11 @@
         "pass": true
       }
     }
-  ]
+  ],
+  "hold_validation": {
+    "status": "user_test_pending",
+    "scope": "Flat indoor floor, no sustained external load; separate hold PI commissioning values",
+    "on_hardware_tested": false,
+    "thermal_tested": false
+  }
 }

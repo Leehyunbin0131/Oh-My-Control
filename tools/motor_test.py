@@ -82,7 +82,7 @@ def parse_info(fields):
             (version >= 6 and any(sign not in (-1, 1) for sign in values[19:21])) or
             (version == 7 and (values[21:23] not in ([0, 0], [150, 60]) or
                               (values[21] and (values[9] != 1 or values[17] != 400000)))) or
-            (version == 8 and values[21:25] != [0, 0, 1, 7])):
+            (version == 8 and (values[21:24] != [0, 0, 1] or values[24] not in (7, 15)))):
         raise MotorError('펌웨어 버전·엔코더 핀·구동 제한이 이 검사 코드와 다릅니다.')
     if values[9] not in LINKS or not 1 <= values[10] <= 127:
         raise MotorError('잘못된 모터드라이버 설정')
@@ -102,6 +102,7 @@ def parse_info(fields):
             'max_brake_pwm': values[21] if version >= 7 else 0,
             'max_brake_ms': values[22] if version >= 7 else 0,
             'stream_supported': version == 8, 'hold_supported': version == 8,
+            'hold_servo_supported': version == 8 and bool(values[24] & 8),
             'control_model': CONTROL_MODEL if version == 8 else 'legacy_unsigned_pwm'}
 
 

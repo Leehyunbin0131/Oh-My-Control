@@ -25,13 +25,41 @@ def pid_document(calibration):
     return doc
 
 
-def firmware_info(signs=(1, 1)):
+def firmware_info(signs=(1, 1), features=15):
     return parse_info(('OMR1,I,8,40,41,50,51,20000,300,1500,250,1,1,30000,650,2652,1,10000,650,400000,1000,' +
-                       ','.join(map(str, signs)) + ',0,0,1,7').split(','))
+                       ','.join(map(str, signs)) + f',0,0,1,{features}').split(','))
 
 
 
 class PIDTests(unittest.TestCase):
+    def test_hold_commissioning_requires_capability_and_separate_gains(self):
+        calibration = DriveCalibration(direction_document())
+        doc = pid_document(calibration)
+        doc['hold'].update(enabled=True, max_duration_ms=0)
+        settings = PIDSettings(doc, calibration)
+        self.assertFalse(settings.document['validation_status']['holding'])
+        calls = []
+        client = SimpleNamespace(info=firmware_info(features=7),
+                                 latest={'armed': False, 'command_pwm': [0, 0]},
+                                 command=lambda *args: calls.append(args))
+        with self.assertRaisesRegex(MotorError, '새 메가 펌웨어'):
+            settings.configure(client)
+        self.assertEqual(calls, [])
+        client.info = firmware_info()
+        settings.configure(client)
+        self.assertEqual([c for c in calls if c[0] == 'HOLD_PI'],
+                         [('HOLD_PI', 0, 8000, 10000), ('HOLD_PI', 1, 8000, 10000)])
+        self.assertTrue(all(c[-2] == 0 for c in calls if c[0] == 'HOLD'))
+        self.assertEqual([c for c in calls if c[0] == 'ZERO'],
+                         [('ZERO', 0, 2000, 0, 150), ('ZERO', 1, 2000, 0, 150)])
+        for key, value in [('velocity_kp', 0), ('velocity_ki', 51),
+                           ('velocity_ki', float('nan')), ('max_duration_ms', 1)]:
+            bad = copy.deepcopy(doc); bad['hold'][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                PIDSettings(bad, calibration)
+        for feature in (0, 8, 23):
+            with self.assertRaises(MotorError): firmware_info(features=feature)
+
     def test_ros_boundary_uses_physical_forward_and_measured_encoder_position(self):
         calibration = DriveCalibration(direction_document(right_motor_reversed=True))
         settings = PIDSettings(pid_document(calibration), calibration)

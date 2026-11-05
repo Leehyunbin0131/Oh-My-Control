@@ -13,13 +13,14 @@ GAIN_LIMITS = {'kp': (0, 20), 'ki': (0, 50), 'kd': (0, 2), 'slope': (0.001, 20),
 
 
 def control_defaults():
-    """Unvalidated commissioning values; HOLD stays disabled until measured."""
+    """Commissioning defaults. Driving calibration starts with HOLD disabled."""
     return {'schema_version': 2, 'control_model': CONTROL_MODEL, 'validated': False,
             'encoder_cpr': COUNTS_PER_REV, 'period_ms': 1, 'pwm_limit': 650,
             'min_rpm': 30, 'max_rpm': MAX_RPM, 'default_rpm': 72,
             'validation_status': {'driving': False, 'braking': False, 'holding': False},
             'zero_control': {name: {'kp': 2.0, 'ki': 0.0, 'pwm_limit': 150} for name in ('left', 'right')},
             'hold': {'enabled': False, 'kp_rpm_per_count': .25, 'max_rpm': 5,
+                     'velocity_kp': 8.0, 'velocity_ki': 10.0,
                      'pwm_limit': 120, 'deadband_counts': 2, 'max_error_counts': 100,
                      'max_duration_ms': 10000, 'saturation_ms': 1000}}
 
@@ -77,7 +78,7 @@ class PIDSettings:
             raise ValueError('위치 유지 enabled 설정이 필요합니다.')
         limits = (('kp_rpm_per_count', .01, 10), ('max_rpm', .01, 5), ('pwm_limit', 1, 150),
                   ('deadband_counts', 0, 20), ('max_error_counts', 1, 2652),
-                  ('max_duration_ms', 100, 60000), ('saturation_ms', 100, 5000))
+                  ('max_duration_ms', 0, 60000), ('saturation_ms', 100, 5000))
         for key, lo, hi in limits:
             value = self.hold.get(key)
             if type(value) not in (int, float) or not math.isfinite(value) or not lo <= value <= hi:
@@ -86,8 +87,14 @@ class PIDSettings:
                 raise ValueError(f'위치 유지 설정은 정수여야 합니다: {key}')
         if self.hold['max_error_counts'] <= self.hold['deadband_counts']:
             raise ValueError('최대 위치 이탈은 데드밴드보다 커야 합니다.')
-        if self.hold['enabled'] and validation.get('holding') is not True:
-            raise ValueError('전류·발열을 포함해 검증한 위치 유지 설정만 활성화할 수 있습니다.')
+        if 0 < self.hold['max_duration_ms'] < 100:
+            raise ValueError('위치 유지 시간은 0(명령 유효기간으로 관리) 또는 100..60000 ms입니다.')
+        if self.hold['enabled']:
+            # Commissioning is allowed without claiming on-hardware validation.
+            for key, lo, hi in (('velocity_kp', .001, 20), ('velocity_ki', 0, 50)):
+                value = self.hold.get(key)
+                if type(value) not in (int, float) or not math.isfinite(value) or not lo <= value <= hi:
+                    raise ValueError(f'위치 유지 속도 PI 설정 오류: {key}')
 
     @classmethod
     def load(cls, path, calibration, **kwargs):
@@ -98,6 +105,8 @@ class PIDSettings:
                 client.info.get('max_rpm_centi') != 10000 or not client.info.get('pid_supported') or client.info.get('encoder_cpr') != COUNTS_PER_REV or
                 client.info.get('pid_period_ms') != self.period_ms or client.info.get('max_pid_pwm') != 650):
             raise MotorError(f'보정 파일의 {self.period_ms} ms 주기와 메가 PID 펌웨어 설정이 일치해야 합니다.')
+        if self.hold['enabled'] and not client.info.get('hold_servo_supported'):
+            raise MotorError('정지 유지용 새 메가 펌웨어가 필요합니다. 모터 전원을 끄고 ./mega_firmware.sh upload로 갱신하세요.')
         expected_signs = [None, None]
         for spec in self.calibration.wheels.values():
             expected_signs[0 if spec['driver_channel'] == 'L' else 1] = (
@@ -117,6 +126,8 @@ class PIDSettings:
             z = self.zero[name]
             client.command('ZERO', channel, round(z['kp'] * 1000), round(z['ki'] * 1000), z['pwm_limit'])
             h = self.hold
+            if h['enabled']:
+                client.command('HOLD_PI', channel, round(h['velocity_kp'] * 1000), round(h['velocity_ki'] * 1000))
             client.command('HOLD', channel, int(h['enabled']), round(h['kp_rpm_per_count'] * 100),
                            round(h['max_rpm'] * 100), h['pwm_limit'], h['deadband_counts'],
                            h['max_error_counts'], h['max_duration_ms'], h['saturation_ms'])

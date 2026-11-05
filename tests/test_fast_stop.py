@@ -48,15 +48,16 @@ class FeedbackStopTests(unittest.TestCase):
         self.assertEqual(sum(call[0] == 'ARM' for call in c.calls), 1)
         self.assertFalse(any(call[0] in ('STOP', 'BRAKE', 'SPEED') for call in c.calls))
 
-    def test_unvalidated_hold_and_over_100_settings_are_rejected(self):
+    def test_hold_commissioning_preserves_unverified_status_and_rejects_over_100(self):
         calibration = DriveCalibration(document())
         for field, value in [('max_rpm', 100.01), ('control_model', 'legacy_unsigned_pwm'), ('schema_version', 1)]:
             doc = pid_document(calibration); doc[field] = value
             with self.assertRaises(ValueError): PIDSettings(doc, calibration)
         doc = pid_document(calibration); doc['hold']['enabled'] = True
-        with self.assertRaises(ValueError): PIDSettings(doc, calibration, require_validated=False)
-        doc['validation_status']['holding'] = True
-        PIDSettings(doc, calibration)
+        settings = PIDSettings(doc, calibration)
+        self.assertFalse(settings.document['validation_status']['holding'])
+        missing = copy.deepcopy(doc); del missing['hold']['velocity_kp']
+        with self.assertRaises(ValueError): PIDSettings(missing, calibration, require_validated=False)
         c = FakeClient(); c.info = firmware_info()
         with self.assertRaises(MotorError): Controller(c, pid_settings=PIDSettings(doc, calibration), rpm=101)
 

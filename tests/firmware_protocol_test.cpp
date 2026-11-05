@@ -17,6 +17,59 @@ void command(uint32_t seq,const std::string& op,bool fragmented=false) {
   while(Serial.available()) loop();
 }
 uint32_t nextSeq() { return lastSequence+1; }
+void testHoldProtocol() {
+  // Enabling without its independent speed PI must fail before ARM.
+  command(nextSeq(),"HOLD,0,1,25,500,120,2,100,0,1000");
+  assert(motion.fault==BAD_COMMAND&&!velocity.hold[0].enabled);
+  tick(110); command(nextSeq(),"CLEAR_FAULT");
+  for(const char* invalid : {"HOLD_PI,2,8000,10000", "HOLD_PI,0,0,10000",
+                             "HOLD_PI,0,8000,50001", "HOLD_PI,0,8000,10000,"}) {
+    command(nextSeq(),invalid); assert(motion.fault==BAD_COMMAND&&!motion.armed);
+    tick(110); command(nextSeq(),"CLEAR_FAULT");
+  }
+  for(unsigned i=0;i<2;++i) {
+    command(nextSeq(),"HOLD_PI,"+std::to_string(i)+",8000,10000");
+    command(nextSeq(),"HOLD,"+std::to_string(i)+",1,25,500,120,2,100,0,1000");
+    assert(velocity.hold[i].enabled&&velocity.zeroGains[i].ki==0);
+  }
+  command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,0,0,300"); tick(120);
+  assert(velocity.state[0]==VelocityControl::HOLD&&velocity.state[1]==VelocityControl::HOLD);
+  const uint32_t left=velocity.holdReference[0],right=velocity.holdReference[1];
+  // Continuous 50 Hz zero targets keep the original position past 10 seconds.
+  for(unsigned n=0;n<600;++n) {
+    command(nextSeq(),"SET_SPEED,0,0,300"); tick(20);
+    assert(!motion.fault&&velocity.holdReference[0]==left&&velocity.holdReference[1]==right);
+  }
+  encL.count+=6; encR.count+=8; tick(10);
+  assert(velocity.positionError[0]==-8&&velocity.positionError[1]==6);
+  assert(velocity.output[0]<0&&velocity.output[1]>0); // opposite encoder signs
+  command(nextSeq(),"SET_SPEED,0,0,300"); tick(20);
+  assert(velocity.holdReference[0]==left&&velocity.holdReference[1]==right);
+  command(nextSeq(),"SET_SPEED,-3000,0,300"); tick();
+  assert(velocity.state[0]==VelocityControl::TRACK&&velocity.state[1]==VelocityControl::HOLD);
+  assert(velocity.holdReference[1]==right);
+  // A live gain edit is rejected and clears both torque-producing outputs.
+  command(nextSeq(),"HOLD_PI,1,8000,10000");
+  assert(motion.fault==BAD_COMMAND&&!motion.armed&&!controlEnabled);
+  assert(!motion.left&&!motion.right); tick();
+  assert(!velocity.output[0]&&!velocity.output[1]);
+  tick(110); command(nextSeq(),"CLEAR_FAULT");
+  command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,0,0,300"); tick(120);
+  assert(velocity.holdReference[0]==encR.count&&velocity.holdReference[1]==encL.count);
+  // Connection heartbeats cannot keep an obsolete position command alive.
+  for(unsigned n=0;n<5;++n) { tick(70); command(nextSeq(),"PING"); }
+  assert(motion.fault==COMMAND_EXPIRED&&!controlEnabled&&!velocity.active);
+  assert(!velocity.output[0]&&!velocity.output[1]);
+  command(nextSeq(),"STOP"); assert(motion.fault==COMMAND_EXPIRED);
+  tick(110); command(nextSeq(),"CLEAR_FAULT");
+  assert(!motion.armed&&!controlEnabled);
+  command(nextSeq(),"ARM"); command(nextSeq(),"SET_SPEED,0,0,300"); tick(120);
+  command(nextSeq(),"STOP"); tick();
+  assert(!motion.armed&&!velocity.active&&!velocity.output[0]&&!velocity.output[1]);
+  for(unsigned i=0;i<2;++i)
+    command(nextSeq(),"HOLD,"+std::to_string(i)+",0,25,500,120,2,100,10000,1000");
+  encL.count=encR.count=0; tick(500); // reset idle estimator before baseline tests
+}
 uint32_t arrivalUs, nextControlUs, streamSequence;
 unsigned streamOffset=0;
 std::string streamPacket;
@@ -47,6 +100,7 @@ int main() {
     command(nextSeq(),"HOLD,"+std::to_string(i)+",0,25,500,120,2,100,10000,1000");
   }
   assert(!motion.fault);
+  testHoldProtocol();
   command(nextSeq(),"ARM"); assert(motion.armed);
   command(nextSeq(),"SET_SPEED,10000,-10000,300",true);
   const auto first=lastSequence; tick();
@@ -120,6 +174,7 @@ int main() {
   encL.invalid=encR.invalid=0xffffffffUL;
   sendInfo(); sendTelemetry(); sendControlState();
   while(txHead!=txTail) drainSerial();
+  assert(Serial.output.find(",0,0,1,15*")!=std::string::npos);
   std::size_t start=0;
   while(start<Serial.output.size()) {
     auto end=Serial.output.find('\n',start); assert(end!=std::string::npos);
@@ -128,5 +183,5 @@ int main() {
     assert(strtoul(line.c_str()+star+1,nullptr,16)==frameCrc(line.c_str(),star));
     start=end+1;
   }
-  std::cout<<"production parser, ISR target application, lease, STOP, limits and CRC passed\n";
+  std::cout<<"production parser, ISR target application, continuous HOLD, lease, STOP, limits and CRC passed\n";
 }

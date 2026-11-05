@@ -43,6 +43,12 @@ int main() {
   assert(!limits.ready(0,0)); configure(limits);
   assert(limits.ready(0,0)); assert(limits.ready(10000,-10000));
   assert(!limits.ready(10001,0)); assert(!limits.ready(0,-10001));
+  assert(!limits.configureHold(0,true,25,500,120,2,100,0,1000)); // gains required
+  assert(!limits.configureHoldPI(2,8000,10000));
+  assert(!limits.configureHoldPI(0,0,10000));
+  assert(!limits.configureHoldPI(0,8000,50001));
+  assert(limits.configureHoldPI(0,8000,10000));
+  assert(!limits.configureHold(0,true,25,500,120,2,100,1,1000));
   for(int sign:{-1,1}) {
     Plant p; p.v.start(sign*7200,sign*7200,p.counts,p.invalid,p.t);
     p.run(4000);
@@ -69,24 +75,63 @@ int main() {
   // Hold enters after standstill, never at the original stop command position.
   Plant h;
   for(int i=0;i<2;++i) {
-    assert(h.v.configureZero(i,8000,10000,150));
-    assert(h.v.configureHold(i,true,25,500,120,2,100,10000,1000));
+    assert(h.v.configureHoldPI(i,8000,10000));
+    assert(h.v.configureHold(i,true,25,500,120,2,100,0,1000));
+    assert(h.v.zeroGains[i].ki==0); // baseline braking remains unchanged
   }
   h.v.start(3000,3000,h.counts,h.invalid,0); h.run(2500);
   const auto stopPosition=h.counts[0]; h.v.setTargets(0,0,h.t); h.run(1500);
   assert(h.v.state[0]==VelocityControl::HOLD&&h.v.state[1]==VelocityControl::HOLD);
-  const auto held=h.v.holdReference[0]; assert(held!=stopPosition);
+  const auto held=h.v.holdReference[0], heldRight=h.v.holdReference[1]; assert(held!=stopPosition);
   for(int n=0;n<20;++n) { h.v.setTargets(0,0,h.t); h.run(20); assert(h.v.holdReference[0]==held); }
   for(int n=0;n<20;++n) { h.position[0]+=1; h.run(1); } // finite external displacement
   h.run(4000);
   assert(std::abs(VelocityControl::delta(h.counts[0],held))<=3);
+  for(int n=0;n<20;++n) { h.position[1]-=1; h.run(1); } // reversed raw encoder sign
+  h.run(4000);
+  assert(std::abs(VelocityControl::delta(h.counts[1],heldRight))<=3);
+  h.run(65000); // no fault just because 10 or 60 seconds elapsed
+  for(int i=0;i<2;++i) assert(h.v.state[i]==VelocityControl::HOLD&&h.v.output[i]==0);
+  assert(!h.v.configureHoldPI(0,8000,10000)); // no live gain replacement
   h.v.setTargets(3000,0,h.t); assert(h.v.state[0]==VelocityControl::TRACK&&h.v.state[1]==VelocityControl::HOLD);
+  assert(h.v.integral[0]==0); // hold effort cannot kick the next motion
   h.run(400); assert(h.rpm[0]>20);
+  assert(h.v.holdReference[1]==heldRight);
+  h.v.stop(); assert(!h.v.active&&!h.v.output[0]&&!h.v.output[1]);
+
+  // Small displacements across uint32 encoder rollover retain their direction.
+  for(int sign:{-1,1}) {
+    VelocityControl r(sign,sign); configure(r);
+    uint32_t c[2]={0xfffffffeUL,0xfffffffeUL}, b[2]={0,0};
+    assert(r.configureHoldPI(0,8000,10000));
+    assert(r.configureHold(0,true,25,500,120,2,100,0,1000));
+    r.start(0,0,c,b,0);
+    for(int t=1;t<150;++t) assert(!r.update(c,b,t));
+    c[0]=2; assert(!r.update(c,b,150));
+    assert(r.holdReference[0]==0xfffffffeUL&&r.positionError[0]==-4*sign);
+    assert(r.output[0]*sign<0&&std::abs(r.output[0])<=120);
+  }
+  // Optional finite duration and persistent saturation remain bounded faults.
+  for(bool finite:{false,true}) {
+    VelocityControl r; configure(r);
+    uint32_t c[2]={0,0}, b[2]={0,0};
+    assert(r.configureHoldPI(0,20000,10000));
+    assert(r.configureHold(0,true,100,500,finite?120:1,2,100,finite?500:0,100));
+    r.start(0,0,c,b,0);
+    for(int t=1;t<150;++t) assert(!r.update(c,b,t));
+    if(!finite) c[0]=10;
+    uint8_t f=0;
+    for(int t=150;t<700&&!f;++t) f=r.update(c,b,t);
+    assert(f==HOLD_LIMIT);
+  }
 
   // No movement is valid at zero, but invalid feedback, leases and limits fail.
   for(int kind=0;kind<6;++kind) {
     VelocityControl v; configure(v); uint32_t c[2]={0,0}, bad[2]={0,0};
-    if(kind==4) assert(v.configureHold(0,true,25,500,120,2,20,500,100));
+    if(kind==4) {
+      assert(v.configureHoldPI(0,8000,10000));
+      assert(v.configureHold(0,true,25,500,120,2,20,500,100));
+    }
     v.start(kind==0||kind==4?0:7200,0,c,bad,0);
     uint8_t fault=0;
     if(kind==0) { for(int t=1;t<2000;++t) assert(v.update(c,bad,t)==0); assert(v.settled[0]); }
