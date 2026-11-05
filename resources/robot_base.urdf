@@ -1,0 +1,343 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="oh_my_mobilerobot">
+  <material name="color_accent">
+    <color rgba="0.462745098 0.537254902 0.5803921569 1" />
+  </material>
+  <material name="color_arm">
+    <color rgba="0.737254902 0.7647058824 0.7843137255 1" />
+  </material>
+  <material name="color_bracket">
+    <color rgba="0.4941176471 0.537254902 0.5764705882 1" />
+  </material>
+  <material name="color_cover">
+    <color rgba="0.3490196078 0.3803921569 0.4196078431 1" />
+  </material>
+  <material name="color_deck">
+    <color rgba="0.3843137255 0.4235294118 0.462745098 1" />
+  </material>
+  <material name="color_display">
+    <color rgba="0.2705882353 0.3176470588 0.3647058824 1" />
+  </material>
+  <material name="color_fastener">
+    <color rgba="0.7647058824 0.7921568627 0.8156862745 1" />
+  </material>
+  <material name="color_hub">
+    <color rgba="0.5490196078 0.5960784314 0.6352941176 1" />
+  </material>
+  <material name="color_joint">
+    <color rgba="0.262745098 0.3058823529 0.3490196078 1" />
+  </material>
+  <material name="color_metal">
+    <color rgba="0.7333333333 0.7607843137 0.7843137255 1" />
+  </material>
+  <material name="color_optic">
+    <color rgba="0.2039215686 0.2745098039 0.3215686275 1" />
+  </material>
+  <material name="color_rubber">
+    <color rgba="0.2117647059 0.2392156863 0.2705882353 1" />
+  </material>
+  <material name="color_screen">
+    <color rgba="0.2078431373 0.2862745098 0.3411764706 1" />
+  </material>
+  <material name="color_screen_card">
+    <color rgba="0.3960784314 0.4745098039 0.5176470588 1" />
+  </material>
+  <material name="color_screen_text">
+    <color rgba="0.8823529412 0.9058823529 0.9215686275 1" />
+  </material>
+  <material name="color_sensor">
+    <color rgba="0.3254901961 0.3764705882 0.4235294118 1" />
+  </material>
+  <link name="base_footprint" />
+  <link name="base_link">
+    <visual name="base_link_bracket">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/base_link/bracket.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_bracket" />
+    </visual>
+    <visual name="base_link_cover">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/base_link/cover.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_cover" />
+    </visual>
+    <visual name="base_link_deck">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/base_link/deck.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_deck" />
+    </visual>
+    <visual name="base_link_fastener">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/base_link/fastener.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_fastener" />
+    </visual>
+    <visual name="base_link_joint">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/base_link/joint.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_joint" />
+    </visual>
+    <visual name="base_link_metal">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/base_link/metal.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_metal" />
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.406 0.446 0.2" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="-0.14 0 0.046" />
+    </collision>
+  </link>
+  <link name="left_wheel_link">
+    <visual name="left_wheel_link_hub">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/left_wheel_link/hub.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_hub" />
+    </visual>
+    <visual name="left_wheel_link_metal">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/left_wheel_link/metal.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_metal" />
+    </visual>
+    <visual name="left_wheel_link_rubber">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/left_wheel_link/rubber.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_rubber" />
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.024" radius="0.068" />
+      </geometry>
+      <origin rpy="1.570796327 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <link name="right_wheel_link">
+    <visual name="right_wheel_link_hub">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/right_wheel_link/hub.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_hub" />
+    </visual>
+    <visual name="right_wheel_link_metal">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/right_wheel_link/metal.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_metal" />
+    </visual>
+    <visual name="right_wheel_link_rubber">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/right_wheel_link/rubber.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_rubber" />
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.024" radius="0.068" />
+      </geometry>
+      <origin rpy="1.570796327 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <link name="left_caster_swivel_link">
+    <visual name="left_caster_swivel_link_fastener">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/left_caster_swivel_link/fastener.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_fastener" />
+    </visual>
+    <visual name="left_caster_swivel_link_metal">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/left_caster_swivel_link/metal.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_metal" />
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.0715 0.053 0.075" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="-0.00925 0 -0.0375" />
+    </collision>
+  </link>
+  <link name="right_caster_swivel_link">
+    <visual name="right_caster_swivel_link_fastener">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/right_caster_swivel_link/fastener.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_fastener" />
+    </visual>
+    <visual name="right_caster_swivel_link_metal">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/right_caster_swivel_link/metal.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_metal" />
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.0715 0.053 0.075" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="-0.00925 0 -0.0375" />
+    </collision>
+  </link>
+  <link name="left_caster_wheel_link">
+    <visual name="left_caster_wheel_link_hub">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/left_caster_wheel_link/hub.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_hub" />
+    </visual>
+    <visual name="left_caster_wheel_link_rubber">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/left_caster_wheel_link/rubber.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_rubber" />
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.033" radius="0.038" />
+      </geometry>
+      <origin rpy="1.570796327 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <link name="right_caster_wheel_link">
+    <visual name="right_caster_wheel_link_hub">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/right_caster_wheel_link/hub.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_hub" />
+    </visual>
+    <visual name="right_caster_wheel_link_rubber">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/right_caster_wheel_link/rubber.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_rubber" />
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.033" radius="0.038" />
+      </geometry>
+      <origin rpy="1.570796327 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <link name="lidar_link">
+    <visual name="lidar_link_optic">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/lidar_link/optic.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_optic" />
+    </visual>
+    <visual name="lidar_link_rubber">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/lidar_link/rubber.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_rubber" />
+    </visual>
+    <visual name="lidar_link_sensor">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/lidar_link/sensor.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_sensor" />
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.09399897908 0.07598632342 0.062" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.009000510459 0 0.01" />
+    </collision>
+  </link>
+  <link name="camera_link">
+    <visual name="camera_link_optic">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/camera_link/optic.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_optic" />
+    </visual>
+    <visual name="camera_link_rubber">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/camera_link/rubber.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_rubber" />
+    </visual>
+    <visual name="camera_link_sensor">
+      <geometry>
+        <mesh filename="package://oh_my_mobilerobot_description/meshes/visual/camera_link/sensor.stl" scale="1 1 1" />
+      </geometry>
+      <material name="color_sensor" />
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.06811 0.1675 0.025" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="-0.033995 0.03875 0" />
+    </collision>
+  </link>
+  <link name="laser_frame" />
+  <link name="camera_optical_frame" />
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_link" />
+    <origin rpy="0 0 0" xyz="0 0 0.101" />
+  </joint>
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="left_wheel_link" />
+    <origin rpy="0 0 0" xyz="0 0.24 -0.033" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <joint name="left_caster_swivel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="left_caster_swivel_link" />
+    <origin rpy="0 0 0" xyz="-0.30775 0.155 0" />
+    <axis xyz="0 0 1" />
+  </joint>
+  <joint name="left_caster_wheel_joint" type="continuous">
+    <parent link="left_caster_swivel_link" />
+    <child link="left_caster_wheel_link" />
+    <origin rpy="0 0 0" xyz="-0.034 0 -0.063" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="right_wheel_link" />
+    <origin rpy="0 0 0" xyz="0 -0.24 -0.033" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <joint name="right_caster_swivel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="right_caster_swivel_link" />
+    <origin rpy="0 0 0" xyz="-0.30775 -0.155 0" />
+    <axis xyz="0 0 1" />
+  </joint>
+  <joint name="right_caster_wheel_joint" type="continuous">
+    <parent link="right_caster_swivel_link" />
+    <child link="right_caster_wheel_link" />
+    <origin rpy="0 0 0" xyz="-0.034 0 -0.063" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="lidar_link" />
+    <origin rpy="0 0 0" xyz="-0.14 0 0.143" />
+  </joint>
+  <joint name="laser_frame_joint" type="fixed">
+    <parent link="lidar_link" />
+    <child link="laser_frame" />
+    <origin rpy="0 0 0" xyz="0 0 0.0303" />
+  </joint>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="camera_link" />
+    <origin rpy="0 0 0" xyz="0.06505 0 0.1035" />
+  </joint>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link" />
+    <child link="camera_optical_frame" />
+    <origin rpy="-1.570796327 0 -1.570796327" xyz="0 0 0" />
+  </joint>
+</robot>

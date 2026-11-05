@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "front_reference": "RealSense camera viewing direction",
+  "side_reference": "Looking forward from behind the camera",
+  "confirmed_by_user": true,
+  "wheels": {
+    "left": {
+      "driver_channel": "L",
+      "driver_terminal": "M2",
+      "encoder_index": 1,
+      "encoder_pins": [
+        50,
+        51
+      ],
+      "forward_command_sign": -1,
+      "forward_encoder_sign": -1
+    },
+    "right": {
+      "driver_channel": "R",
+      "driver_terminal": "M1",
+      "encoder_index": 0,
+      "encoder_pins": [
+        40,
+        41
+      ],
+      "forward_command_sign": -1,
+      "forward_encoder_sign": 1
+    }
+  },
+  "evidence_directory": "reports/fast_stop_high_speed_20261104_233742",
+  "wiring_updated_at": "2026-11-04T22:58:09.714726+09:00",
+  "wiring_update": {
+    "change": "Right R/M1 motor power leads reversed; encoder A/B wiring unchanged.",
+    "command_sign_before": 1,
+    "command_sign_after": -1,
+    "physical_forward_encoder_sign": 1,
+    "motion_retested": true,
+    "report": "reports/right_motor_polarity_20261104_225648/summary.json"
+  },
+  "motion_validation": {
+    "scope": "Fixed-PWM motion after right motor lead reversal; PID validation is recorded separately in pid_validation.",
+    "forward_30s": "reports/right_motor_polarity_20261104_225648/forward_30s/20261104_230418_199733/summary.json",
+    "forward_braking": "reports/fast_stop_high_speed_20261104_233742/summary.json",
+    "reverse_braking": "reports/fast_stop_reverse_20261104_233921/summary.json"
+  },
+  "pid_validation": {
+    "validated_at": "2026-11-05T13:00:16.138773+09:00",
+    "protocol": 8,
+    "control_model": "signed_pwm_v1",
+    "period_ms": 1,
+    "max_rpm": 95,
+    "autotune_completed": true,
+    "report": "reports/pid_recalibration_v8_20261105_124619/summary.json",
+    "autotune_report": "reports/pid_tune_20261105_125430_184394/summary.json",
+    "conditions": "Both wheels raised; driving and zero-speed braking. Hold and ground tests pending."
+  }
+}

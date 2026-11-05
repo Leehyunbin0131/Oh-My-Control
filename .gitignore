@@ -1,0 +1,17 @@
+build/
+install/
+log/
+reports/
+__pycache__/
+.pytest_cache/
+*.pyc
+.tools/
+
+# Local credentials and editor files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.vscode/
+.idea/
