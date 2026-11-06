@@ -36,7 +36,7 @@ https://github.com/user-attachments/assets/bb98cf7c-ee6c-49f0-b458-9154ca7bda5a
 </td></tr></table>
 
 <p align="center">
-  <sub>1 kHz 속도 PID 및 정지 위치 유지(HOLD) 기반 실기 주행 · <a href="docs/videos/robot-driving.mp4">원본 영상 (MP4)</a></sub>
+  <sub>실기 주행 · <a href="docs/videos/robot-driving.mp4">원본 영상 (MP4)</a></sub>
 </p>
 
 | 전면 | 전면 사시 | 측면 · 상판 |
