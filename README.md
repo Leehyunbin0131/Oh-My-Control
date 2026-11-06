@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/photos/completed-front.jpg" alt="라이다와 깊이 카메라가 장착된 모바일 로봇 베이스 실물" width="680">
+  <img src="docs/images/oh-my-control-banner.png" alt="Oh-My-Control 1 kHz 모터 제어·센서 보정·TUI 진단 개요 배너" width="960">
 </p>
 
 <h1 align="center">Oh My Control</h1>
@@ -39,9 +39,9 @@ https://github.com/user-attachments/assets/bb98cf7c-ee6c-49f0-b458-9154ca7bda5a
   <sub>1 kHz 속도 PID 및 정지 위치 유지(HOLD) 기반 실기 주행 · <a href="docs/videos/robot-driving.mp4">원본 영상 (MP4)</a></sub>
 </p>
 
-| 전면 사시 | 측면 · 상판 |
-| :---: | :---: |
-| ![완성 로봇의 전면 사시 사진](docs/images/photos/completed-angle.jpg) | ![완성 로봇의 측면과 상판 사진](docs/images/photos/completed-side.jpg) |
+| 전면 | 전면 사시 | 측면 · 상판 |
+| :---: | :---: | :---: |
+| ![완성 로봇의 전면 사진](docs/images/photos/completed-front.jpg) | ![완성 로봇의 전면 사시 사진](docs/images/photos/completed-angle.jpg) | ![완성 로봇의 측면과 상판 사진](docs/images/photos/completed-side.jpg) |
 
 <a id="architecture"></a>
 
