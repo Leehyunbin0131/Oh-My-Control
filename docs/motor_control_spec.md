@@ -1,130 +1,69 @@
-# 모터 제어 명세 — 현재 v8
+# 모터 제어 명세
 
-최종 정리: 2026-11-05. Mega v8 / `signed_pwm_v1`, 설정 schema 2.
-**기존 주행·0 RPM 제동의 무부하 재보정과 오토튠 완료. 유지 계수는 사용자 수동 시험으로 확인했으며, 즉시 HOLD 진입 변경의 실제 제동 검증은 별도다.**
+[README](../README.md) · [제어·통신 주기](control_timing.md) · [IMU 보정](imu_calibration.md)
 
-## 현재 설정
+Arduino Mega 2560과 NT-S-DCDM1210 모터 드라이버를 이용한 양륜 차동 구동 제어기의 동작 규격과 시리얼 프로토콜을 정의합니다.
 
-| 항목 | 값 |
+## 제어기 기본 사양
+
+| 항목 | 규격 |
 | --- | --- |
-| 속도 PID | Mega Timer1, 1000 Hz / 1 ms 유지 |
-| 엔코더 샘플링 | 20 kHz, 명목 2652 counts/rev |
-| 호스트 목표 송신 / 상태 수신 | 50 Hz / 20 Hz |
-| I²C | 400 kHz, 주소 0x01, 출력 갱신 실측 평균 약 580 Hz |
-| 속도 | 기본 72 RPM, 검증된 운용 상한 95 RPM, MCU 목표 상한 100 RPM |
-| 출력 제한 | 주행 PWM 650, HOLD 비활성 시 0 RPM 제동 PWM 150, HOLD 제동·위치 유지 PWM 350 |
-| 목표 유효기간 / 통신 watchdog | 300 ms / 300 ms |
-| 위치 유지 | `hold.enabled=true`, 유효한 0 목표가 갱신되는 동안 유지 |
+| 제어 루프 주기 | Mega Timer1 인터럽트 기반 **1000 Hz (1 ms)** |
+| 엔코더 샘플링 | 20 kHz 구적(Quadrature) 디코딩, 명목 2652 counts/rev |
+| 호스트 송신 / 수신 주기 | 목표 속도 송신 **50 Hz**, 상태 텔레메트리 수신 **20 Hz** |
+| 모터 드라이버 인터페이스 | I²C 400 kHz, 주소 `0x01` (`signed_pwm_v1`) |
+| 목표 속도 범위 | 기본 72 RPM, 운용 상한 **95 RPM**, 과속 보호 상한 **100 RPM** |
+| 출력 PWM 제한 | 주행 중 최대 **650**, 0 RPM 감속 최대 **150**, 위치 유지(`HOLD`) 최대 **350** |
+| 명령 유효기간 (Lease) | **300 ms** (주기적 갱신이 중단되면 자동 출력 해제) |
 
-100 RPM 목표 시험에서는 왼쪽 출력 포화와 오른쪽 과속 보호가 관찰되어 운용 상한을 95 RPM으로 정했다. 측정 속도 100 RPM 초과가 100 ms 지속되면 오류로 해제한다. 순간 속도가 100 RPM을 절대 넘지 않는다는 보장은 아니다.
+좌우 바퀴 채널과 전진 부호는 [`config/drive_calibration.json`](../config/drive_calibration.json), 바퀴별·방향별 피드포워드 및 PID 계수는 [`config/motor_pid.json`](../config/motor_pid.json)을 기준으로 합니다.
 
-좌우·방향은 [drive_calibration.json](../config/drive_calibration.json), PID 계수·검증 상태는 [motor_pid.json](../config/motor_pid.json)이 기준이다. 왼쪽은 L/M2·D50/51, 오른쪽은 R/M1·D40/41이다. 실제 전진 명령 부호는 양쪽 음수, 원시 엔코더 전진 부호는 왼쪽 음수·오른쪽 양수다. 호스트 경계에서 실제 전진을 양수로 변환한다.
+## 주행 제어와 정지 위치 유지 (`HOLD`)
 
-## 주행과 정지
+호스트는 목표 속도를 설정하고, Mega는 엔코더 피드백을 바탕으로 부호 있는 PWM을 계산합니다. 주행 중 새로운 목표 속도를 수신하면 제어 상태를 초기화하지 않고 연속적으로 목표를 갱신합니다.
 
-상위 프로그램은 목표 속도를 정하고 Mega는 엔코더 피드백으로 부호 있는 PWM을 계산한다. 좌우 목표를 원자적으로 갱신하며, 주행 중 새 목표를 받아도 속도 추정과 제어 상태를 매번 초기화하지 않는다. MCU에 별도의 목표 감속 곡선을 추가하지 않는다.
+* **주행(`TRACK`)**: 바퀴별·회전 방향별 선형 피드포워드(`slope`, `offset`)와 속도 PID(`kp`, `ki`, `kd`)를 합산해 구동 PWM을 출력합니다.
+* **정지 및 위치 유지(`HOLD`)**: `SET_SPEED 0 0`을 수신한 첫 제어 주기에 현재 엔코더 카운트를 목표 위치(`holdReference`)로 저장하고 `HOLD` 상태로 전환합니다. 위치 오차에 직접 비례하는 PWM 항과 유지 전용 속도 피드백을 결합해 제동 및 정지 위치를 유지합니다.
+* **출력 해제(`STOP`)**: PID 및 위치 유지 제어를 즉시 해제하고 양쪽 모터 PWM을 0으로 설정합니다.
+* **오류 보호(`FAULT`)**: 통신 만료, 엔코더 배선 이상, 과속(100 RPM 초과 100 ms 지속), 위치 유지 한도 초과 시 즉시 출력을 차단하고 오류 코드를 기록합니다. 원인을 해소한 뒤 `CLEAR_FAULT` 명령으로 해제하기 전까지 재구동하지 않습니다.
 
-- 정상 정지: `SET_SPEED 0 0` → 다음 제어 주기에서 해당 위치를 저장하고 즉시 HOLD 제동·유지.
-- 출력 해제: `STOP` → PID·위치 유지 해제, 양쪽 PWM 0 요청. 기존 오류는 보존한다.
-- 오류·통신 만료: 출력 해제 요청과 오류 기록. 자동 재구동하지 않는다.
-- 오류 해제: 원인 해소 후 `CLEAR_FAULT`. 새 `ARM`과 새 목표 없이는 구동하지 않는다.
+### 위치 유지 (`HOLD`) 파라미터
 
-목표 0에서는 주행 feedforward를 끄고 속도 오차를 보정한다. 제동 중 반대 부호 PWM이 발생할 수 있지만, 과거의 별도 역방향 `BRAKE` 루틴은 제거했다. 전류·토크를 직접 제어하는 방식은 아니다. 드라이버 통신 자체가 끊기면 소프트웨어만으로 실제 출력 차단을 보장할 수 없다.
+| 항목 | 설정값 | 설명 |
+| --- | --- | --- |
+| 위치 $\rightarrow$ 속도 비례항 / 상한 | 0.25 RPM/count / 5 RPM | 위치 오차를 감쇠하기 위한 내부 목표 속도 |
+| 직접 위치 비례항 (`HOLD_POS`) | 18 PWM/count | 속도 감쇠와 독립된 정지 위치 복원 강성 |
+| 유지 전용 속도 PI (`HOLD_PI`) | Kp 8.0, Ki 0.0 | 외력 제거 후 적분 누적으로 인한 역방향 밀림 방지를 위해 Ki는 0으로 설정 |
+| 출력 상한 / 위치 데드밴드 | PWM 350 / 1 count | 데드밴드 이내 정지 상태에서는 출력 0 유지 |
+| 이탈 한도 / 포화 지속 한도 | 100 counts / 1000 ms | 기준 위치에서 100 counts 이상 밀리거나 출력 포화가 1초 지속되면 `HOLD_LIMIT (fault 10)`으로 해제 |
 
-키보드는 `qwe/asd/zxc` 한 번 입력 후 방향을 유지한다. `s`/`Space`는 정상 정지다. 종료 시 최대 1초 동안 피드백 정지를 시도한 뒤 출력을 해제한다. 직접 PWM 진단의 정지와 오류 정지는 출력 해제다.
-키보드 PID 모드의 제자리 회전(`a`/`d`, 좌우 화살표)은 각 바퀴 목표를 `min(선택한 주행 RPM, 50 RPM)`으로 제한한다. 직진·후진·곡선의 목표와 직접 PWM 진단 모드에는 이 제한을 적용하지 않는다.
+## 시리얼 프로토콜 (`OMR1`)
 
-### 위치 유지 기능의 범위
+호스트와 Mega는 115200 bps UART에서 시퀀스 번호와 CRC16-CCITT를 포함한 줄 단위 프레임(`OMR1,...*CRC`)으로 통신합니다.
 
-목표 0을 적용하는 첫 1 ms 제어 주기에 현재 엔코더 위치를 한 번 저장하고 HOLD에 진입한다. 위치 오차에 직접 비례하는 PWM 항과 유지 전용 속도 피드백으로 즉시 제동·유지한다. 반복 0 목표는 유지 기준을 바꾸지 않는다. 관성으로 기준 위치를 지나치면 그 위치로 되돌리려는 출력이 생긴다. 새 nonzero 목표는 해당 바퀴를 즉시 `TRACK`으로 전환하며 유지 적분값을 지운다. 다른 바퀴는 0 목표이면 계속 `HOLD`할 수 있다. 100 ms 안정 판정은 `settled` 상태와 정상 종료 확인에 남기며, HOLD 진입 조건으로 사용하지 않는다. 호스트·시리얼·드라이버 전송 지연은 1 ms 제어 주기와 별도다.
-
-실내 평탄한 바닥에서 지속적인 외력이 거의 없는 조건을 대상으로 한다. 별도 온도 센서 설치를 활성화 조건으로 두지 않는다. 아래 설정은 모델 시험을 통과했고, 2026-11-05 사용자가 HOLD 상태에서 손으로 바퀴를 돌려보며 “이제 확실히 강하게 버팁니다”라고 확인했다. `hold_validation.status=user_confirmed_manual_hold`, `on_hardware_tested=true`로 기록한다. 정량적인 유지 토크·지면 제동 검증과 구분하기 위해 `validation_status.holding=false`는 유지한다.
-
-| 위치 유지 설정 | 현재 값 |
+| 명령 | 동작 |
 | --- | --- |
-| 위치 P / 속도 목표 상한 | 0.25 RPM/count / 5 RPM |
-| 직접 위치 P | 18 PWM/count; 위치 강성을 속도 감쇠와 분리 |
-| 유지 전용 속도 PI | Kp 8, Ki 0; 주행·0 RPM 제동 계수와 분리 |
-| 출력 상한 / 위치 데드밴드 | PWM 350 / 1 count |
-| 위치 이탈 한도 / 연속 출력 포화 한도 | 100 counts / 1000 ms |
-| 총 유지시간 | `max_duration_ms=0`: 별도 제한 없음, 300 ms 목표 유효기간은 계속 적용 |
+| `ARM` | 출력 0 상태에서 목표 속도 수신 준비 |
+| `SET_SPEED L R lease_ms` | 드라이버 `[L, R]` 순서 목표 속도(0.01 RPM 단위) 및 유효기간(100~300 ms) 설정 |
+| `PING` | 연결 상태 확인 (이동 목표의 유효기간은 연장하지 않음) |
+| `STOP` | 제어 해제 및 출력 0 요청 |
+| `CLEAR_FAULT` | 기록된 오류 상태 해제 (재구동 시 별도 `ARM` 필요) |
+| `PID channel dir kp ki kd slope offset` | 바퀴별·방향별 주행 PID 및 피드포워드 계수 설정 |
+| `ZERO channel kp ki pwm` | 0 RPM 감속용 PI 계수 및 PWM 상한 설정 |
+| `HOLD_PI channel kp ki` | 위치 유지 전용 속도 PI 계수 설정 |
+| `HOLD_POS channel kp` | 위치 유지용 직접 위치 비례항(PWM/count) 설정 |
+| `HOLD channel enable kp speed pwm deadband error duration saturation` | 위치 유지 활성화 및 안전 한도 설정 |
 
-데드밴드 안에서 움직임이 없으면 출력은 0이며, 작은 밀림부터 보정 출력을 낸다. 정마찰 때문에 데드밴드 밖의 작은 고정 오차와 일정 PWM이 남을 수 있다. 유지 적분을 0으로 설정해 외력이 사라진 뒤 누적 출력으로 반대편까지 밀리는 현상을 줄인다. 속도가 거의 0이고 포화 전인 구간의 위치 강성은 약 20 PWM/count(직접 18 + 속도 목표 항 2)다. 이는 측정된 토크 값이 아니다.
-
-HOLD가 활성화된 현재 설정에서는 목표 0 적용 직후부터 PWM 350 한도를 사용한다. HOLD 비활성 시 0 RPM 제동(Kp 2, Ki 0, PWM 150), 주행 중 반대 극성 출력 한도 150과 주행 계수는 그대로다. 위치→속도 상한 5 RPM은 내부 보정 목표의 상한이며 외력이 밀어낸 실제 바퀴 속도의 보장은 아니다. 명령 적용 위치에서 100 counts 넘게 이탈하거나 출력 포화가 1초 지속되면 fault 10으로 출력을 해제한다. 이 위치 한도에는 제동 중 관성 이동도 포함된다. `max_duration_ms`를 100–60000 ms로 설정하면 시간제한도 사용할 수 있다.
-
-정상 0 명령 갱신을 멈추거나 `PING`만 보내면 300 ms 이내에 목표가 만료되고 위치 유지도 해제된다. `STOP`, 종료, 통신·엔코더·드라이버 오류도 유지 출력을 해제한다. 전원이 꺼졌을 때의 주차 제동은 이 기능의 범위가 아니다. 유지력 수동 시험은 사용자가 확인했고, 실제 주행 중 제동 시험도 사용자가 직접 진행한다.
-
-현재 기기에 즉시 HOLD 변경판 업로드를 완료했다. 실제 주행 제동 시험은 사용자가 진행하며, 변경 전 수동 시험을 새 제동 동작의 검증으로 간주하지 않는다. (로컬 기록: `reports/motor_immediate_hold_20261105/summary.json`)
-
-## 시리얼 인터페이스
-
-115200 bps, CRC16·시퀀스를 포함한 v8 프레임을 사용한다. 아래는 프레임 내부 명령이다.
-
-| 명령 | 의미 |
-| --- | --- |
-| `ARM` | 출력 없이 새 목표 수신 준비 |
-| `SET_SPEED L R lease_ms` | 드라이버 [L, R] 순서, 0.01 RPM 단위; 유효기간 100–300 ms |
-| `PING` | 연결 생존 확인. 이동 목표 유효기간을 연장하지 않음 |
-| `STOP` | 제어 해제·출력 0 요청, 기존 오류 보존 |
-| `CLEAR_FAULT` | 원인 해소 확인 후 오류 해제; 구동 권한은 복구하지 않음 |
-| `ZERO channel kp ki pwm` | 바퀴별 0 RPM PI 계수(1000배 정수)와 제동 PWM 상한 |
-| `HOLD_PI channel kp ki` | 바퀴별 유지 전용 속도 PI 계수(1000배 정수); HOLD 활성화 전 필수 |
-| `HOLD_POS channel kp` | 직접 위치 P(1000배 정수, 0..30000); 0은 추가 위치항 해제 |
-| `HOLD channel enable kp speed pwm deadband error duration saturation` | 제한된 위치 유지 설정 |
-
-설정 명령은 출력 해제 상태에서 적용한다. 유효한 `SET_SPEED`만 목표 유효기간을 연장한다. CRC 오류, 중복·역순 시퀀스와 거부된 명령은 이동 권한을 연장하지 않는다. 정상 `STOP` 프레임은 중복 시퀀스도 처리한다. `ACK`는 명령 수락이며 실제 정지 완료가 아니다.
-
-식별 프레임의 기능 마스크는 `31`이다. 비트 8은 독립 유지 PI와 총 유지시간 0, 비트 16은 직접 위치 P 및 확장 유지 출력을 알린다. 호스트는 기존 v8/마스크 7·15도 읽지만 해당 기능이 필요한 설정은 전송 전에 거부하고 업로드를 안내한다. `HOLD_PI`를 먼저 설정하지 않으면 펌웨어도 위치 유지 활성화를 거부한다. 마스크 31에서는 이전 프로필에 직접 위치항이 없을 경우 `HOLD_POS 0`을 보내 이전 설정이 남지 않게 한다.
-
-상태는 전역 `DISABLED / ARMED / ACTIVE / FAULT`, 바퀴별 `TRACK / ZERO_SPEED / HOLD`로 구분한다. 기본 상태 송신은 20 Hz이며 세부 타이밍·버퍼 통계는 별도 진단 프레임에 담는다. 빌드 시 Arduino 코어와 스케치 모두 `SERIAL_RX_BUFFER_SIZE=256`을 사용한다. 수신은 한 번에 최대 128바이트로 처리하며 I²C 출력과 상태 문자열 생성을 분리한다.
-
-> **차기 ROS 2 드라이버 구현 시 좌/우 채널 인덱스 주의사항**:
-> 펌웨어의 `OMR1,T` 텔레메트리 패킷에서 **원시 엔코더 카운트(`counts`) 및 불효 전이(`invalid`) 배열은 `[오른쪽(D40/41), 왼쪽(D50/51)]` 순서**(`ENC_INDEX = {'L': 1, 'R': 0}`)로 송신되며, **목표/측정 속도(`target_rpm_centi`, `measured_rpm_centi`)·출력(`command_pwm`)·제어 상태 배열은 드라이버 `[왼쪽(L/M2), 오른쪽(R/M1)]` 순서**(`VEL_INDEX = {'L': 0, 'R': 1}`)로 송신된다. 호스트 파서 구현 시 [motor_test.py](../tools/motor_test.py)의 인덱스 매핑을 그대로 따른다.
-
-## 검증 결과와 한계
-
-근거: 로컬 보고서 `reports/pid_recalibration_v8_20261105_124619/summary.json` 및 [motor_pid.json](../config/motor_pid.json).
-
-| 검증 | 결과 |
-| --- | --- |
-| 오토튠 | 36개 실험 묶음, 72회 실행 |
-| 최종 무부하 주행·제동 | 18조건 통과 |
-| 연속 명령 | 9조건 통과 |
-| 평균 속도 오차 절댓값 최댓값 | 약 0.39 RPM |
-| PID 주기 누락 | 0회 |
-| 제어 주기 범위 | 972–1028 µs |
-| 제어 ISR 최대 경과시간 | 816 µs, 중첩 인터럽트 포함 가능 |
-| 호스트 0 명령 → 정지 판정 | 약 0.23–0.31초 |
-
-정지 판정 시간에는 속도 필터, 안정 판정과 통신 시간이 포함된다. 기계적 정지 시간이나 지면 정지 거리가 아니다. 최대 경과시간은 평균 CPU 사용률을 뜻하지 않는다. RPM은 명목 CPR을 사용하며 실제 한 바퀴 환산 보정은 아직이다.
-
-`validated=true`와 `autotune.completed=true`는 **위치 유지 변경 전 v8의 무부하 주행·0 RPM 제동**에 대한 결과다. 해당 계수·제동 연산은 유지했고, 새 위치 유지의 사용자 수동 시험과는 별도다. 1 kHz 실행시간을 재측정한 결과도 아니다. 과거 v7 결과를 새 제어기의 검증으로 재사용하지 않는다. 지면 정지 거리·방향 변화와 정량 유지 토크·전류·발열 검증은 완료하지 않았다.
-
-자동 테스트는 가상 시리얼·모터 모델과 실제 펌웨어 파서·Timer ISR의 네이티브 실행을 사용한다. 10초를 넘는 0 목표 갱신, 유지 기준 보존, 좌우 엔코더 부호·카운트 넘침, 한 바퀴 유지와 반대 바퀴 주행, 재출발, `PING`만 수신할 때 목표 만료, 출력·이탈 제한을 확인한다. 기존 주행·제동·CRC·통신 부하 검사도 유지한다. 실행 방법은 [README](../README.md#빌드와-검증)에 있다. 모델 통과와 Mega 빌드 성공은 실제 출력이나 실행시간의 검증을 대신하지 않는다.
-
-이전 유지력 개선판의 모델 자료는 로컬 `reports/motor_hold_delay_review_20261105/recommendation.json`, 사용자 시험 로그 분석은 `reports/motor_hold_stiffness_20261105/diagnosis.json`에 보관한다. 이번 변경에서는 실제 파서·제어 코드를 사용해 첫 제어 주기 진입, 반복 0 목표의 기준 보존, 재출발·출력 해제를 확인한다. 넓은 매개변수 탐색이나 전체 테스트 반복은 하지 않는다.
-
-## ROS 2 연동과 후속 작업
-
-아직 ROS 모터 어댑터·오도메트리·Nav2 연동은 구현하지 않았다. 공통 도구의 `PIDSettings.velocity_commands()`와 `joint_states()`에는 rad/s 명령과 실측 rad·rad/s 변환을 마련했다.
-
-- Jetson: 센서 처리, SLAM, Nav2, 차체 속도 → 바퀴 목표 변환, 엔코더 오도메트리.
-- Mega: 엔코더 읽기, 1000 Hz 속도 PID와 0 목표 위치 유지, 드라이버 출력, 명령 만료·오류 감시.
-- ROS 어댑터: 시리얼 작업을 제어 콜백과 분리하고 원본 명령 시각을 보존한다. 오래된 이동 목표를 반복 송신해 무기한 연장하지 않는다.
-- 실제 바퀴 반지름·윤거·CPR을 측정하고 엔코더 피드백으로 오도메트리를 검증한다. 평활화를 사용하면 상위 가감속 한도와 실제 하드웨어 응답을 맞춘다.
-
-**현재 PID 1000 Hz를 유지한다.** Nav2 20·30·50 Hz를 SLAM 동시 실행 상태에서 비교한다. 메가의 실제 여유가 부족하면 PID 500 Hz를 별도 검토하며, 적분·미분 시간 계산, 속도 필터, 정지·오류 시간, 출력 스케줄러를 함께 조정하고 다시 검증한다. 기준과 측정 한계는 [제어·통신 주기](control_timing.md)에 정리했다.
+> **호스트 파서 구현 시 좌/우 인덱스 규칙**:
+> `OMR1,T` 상태 텔레메트리 프레임에서 원시 엔코더 카운트(`counts`) 및 불효 전이(`invalid`) 필드는 **`[오른쪽(D40/41), 왼쪽(D50/51)]` 순서**(`ENC_INDEX = {'L': 1, 'R': 0}`)로 전송되며, 목표/측정 속도(`target_rpm_centi`, `measured_rpm_centi`)·출력(`command_pwm`)·제어 상태 필드는 **드라이버 `[왼쪽(L/M2), 오른쪽(R/M1)]` 순서**(`VEL_INDEX = {'L': 0, 'R': 1}`)로 전송됩니다. 상위 ROS 2 드라이버 작성 시 [`tools/motor_test.py`](../tools/motor_test.py)의 인덱스 매핑을 동일하게 적용합니다.
 
 ## 구현 파일
 
 | 경로 | 역할 |
 | --- | --- |
-| [velocity_core.h](../firmware/mega_motor_test/velocity_core.h) | 속도 추정, PID·0 RPM 제동·선택적 위치 유지 |
-| [test_core.h](../firmware/mega_motor_test/test_core.h) | 구동 허가, 유효기간과 오류 감시 |
-| [mega_motor_test.ino](../firmware/mega_motor_test/mega_motor_test.ino) | 타이머, 엔코더, 프로토콜, I²C·상태 송신 |
-| [motor_test.py](../tools/motor_test.py), [motor_pid.py](../tools/motor_pid.py) | 시리얼 API, 설정 검사와 단위 변환 |
-| [keyboard_control.py](../tools/keyboard_control.py) | 방향 유지 조종, 연속 목표와 정상 종료 |
-| [tune_motors.py](../tools/tune_motors.py), [motor_autotune.py](../tools/motor_autotune.py) | 재보정·자동 탐색·제동 검증 |
-
-하드웨어 출력 규약: [드라이버 매뉴얼](../NT-S-DCDM1210.pdf). ROS 인터페이스 참고: [Jazzy diff_drive_controller](https://control.ros.org/jazzy/doc/ros2_controllers/diff_drive_controller/doc/userdoc.html).
+| [`firmware/mega_motor_test/velocity_core.h`](../firmware/mega_motor_test/velocity_core.h) | 속도 추정, 주행 PID, 0 RPM 감속 및 위치 유지(`HOLD`) 연산 코어 |
+| [`firmware/mega_motor_test/test_core.h`](../firmware/mega_motor_test/test_core.h) | 구동 허가 상태기, 명령 유효기간 및 오류 감시 |
+| [`firmware/mega_motor_test/mega_motor_test.ino`](../firmware/mega_motor_test/mega_motor_test.ino) | Timer1 인터럽트, 20 kHz 엔코더 샘플링, 시리얼 파서 및 I²C 출력 스케줄러 |
+| [`tools/motor_test.py`](../tools/motor_test.py) · [`tools/motor_pid.py`](../tools/motor_pid.py) | 시리얼 클라이언트, 설정 유효성 검사 및 단위 변환(`velocity_commands`, `joint_states`) |
+| [`tools/keyboard_control.py`](../tools/keyboard_control.py) | 키보드 조종, 연속 목표 갱신 및 정지 제어 |
+| [`tools/tune_motors.py`](../tools/tune_motors.py) · [`tools/motor_autotune.py`](../tools/motor_autotune.py) | 피드포워드·PI 특성 측정 및 계단 응답 기반 PID 자동 탐색 도구 |
