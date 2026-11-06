@@ -35,7 +35,7 @@ HFI-A9는 시리얼 값을 읽고, 카메라는 설치된 librealsense RSUSB SDK
 
 ## 2026-11-05 측정 결과
 
-두 센서 모두 정지 측정과 별도 구간 검증을 통과했다. [원본·검증 보고서](../reports/imu_calibration_20261105_192335_778415/summary.json)
+두 센서 모두 정지 측정과 별도 구간 검증을 통과했다. (로컬 원본·검증 보고서: `reports/imu_calibration_20261105_192335_778415/summary.json`, 보정값: [imu_calibration.json](../config/imu_calibration.json))
 
 | 센서 | 검증 구간의 평균 각속도 벡터 크기 | 선택 |
 | --- | --- | --- |

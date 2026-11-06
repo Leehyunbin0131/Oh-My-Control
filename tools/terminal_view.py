@@ -6,7 +6,19 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 from PIL import Image
-from wcwidth import wcwidth
+try:
+    from wcwidth import wcwidth
+except ImportError:
+    import unicodedata
+
+    def wcwidth(ch):
+        if not ch or ch == '\0':
+            return 0
+        if ord(ch) < 32 or 0x7F <= ord(ch) < 0xA0:
+            return -1
+        if unicodedata.combining(ch):
+            return 0
+        return 2 if unicodedata.east_asian_width(ch) in ('F', 'W') else 1
 
 
 BG = (12, 18, 27)

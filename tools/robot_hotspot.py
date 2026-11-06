@@ -41,6 +41,12 @@ def profile_uuid():
     return value('connection.uuid', 'connection', 'show', PROFILE)
 
 
+def mask_secret(secret):
+    if not secret or secret == '--':
+        return ''
+    return '*' * min(len(secret), 8) + f' ({len(secret)}자, 마스킹됨)'
+
+
 def show_current():
     uuid = value('GENERAL.CON-UUID', 'device', 'show', DEVICE)
     if not uuid or uuid == '--':
@@ -50,7 +56,7 @@ def show_current():
     password = value('802-11-wireless-security.psk', 'connection', 'show', 'uuid', uuid, secrets=True)
     addresses = value('IP4.ADDRESS', 'device', 'show', DEVICE).splitlines()
     print(f'현재 Wi-Fi 이름: {ssid or "확인 불가"}')
-    print(f'현재 Wi-Fi 저장 비밀번호: {password or "저장된 PSK를 읽을 수 없음 (sudo로 확인)"}')
+    print(f'현재 Wi-Fi 저장 비밀번호: {mask_secret(password) or "저장된 PSK를 읽을 수 없음 (sudo로 확인)"}')
     for address in addresses:
         ip = address.split('/')[0]
         if ip and ip != '--':

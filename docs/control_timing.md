@@ -23,7 +23,7 @@ Jetson에서 SLAM, Nav2, 센서 처리, 바퀴 속도 변환과 오도메트리�
 
 실행: `python3 tools/profile_motor_link.py`. 이 도구는 전용 v8 펌웨어 식별 후 STOP/PING만 허용하며, 각 주기를 기본 8초씩 검사한다. 조종 프로그램을 종료한 상태에서 실행한다.
 
-결과: [통신 측정 보고서](../reports/motor_link_profile_20261105_165245_819142/summary.json).
+결과: 로컬 측정 보고서 `reports/motor_link_profile_20261105_165245_819142/summary.json`.
 
 | 요청 주기 | 실제 송신 | 응답 왕복 p95 | MCU→호스트 UART 사용률 | 오류·타이머 누락 |
 | --- | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ Jetson에서 SLAM, Nav2, 센서 처리, 바퀴 속도 변환과 오도메트리�
 
 응답을 기다린 후 다음 명령을 보내는 PING 검사다. Python 스케줄링과 응답 대기 때문에 요청 주기보다 실제 송신이 느리며, 이것을 MCU의 최대 처리 주파수로 해석하지 않는다. PING은 실제 목표속도 명령보다 짧다. UART 사용률은 115200 bps, 8N1의 방향별 전송량으로 계산했고 송수신 비율을 더하지 않는다. 응답 시간은 호스트 전송부터 ACK 수신까지이며 바퀴 반응 시간이 아니다. 각 단계 8초의 짧은 비교이므로 응답 지연의 작은 차이를 성능 우열로 단정하지 않는다.
 
-모터 출력은 해제했고 PID 활성 업데이트는 0회다. 이 결과는 동작 중 PID 부하나 SLAM 동시 실행 성능을 검증한 것이 아니다. 주행 근거는 [기존 PID·연속 명령 검증](../reports/pid_recalibration_v8_20261105_124619/summary.json)을 사용한다.
+모터 출력은 해제했고 PID 활성 업데이트는 0회다. 이 결과는 동작 중 PID 부하나 SLAM 동시 실행 성능을 검증한 것이 아니다. 주행 근거는 로컬 보고서 `reports/pid_recalibration_v8_20261105_124619/summary.json` 및 [motor_pid.json](../config/motor_pid.json)을 사용한다.
 
 ## Nav2 주기 결정
 

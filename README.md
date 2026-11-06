@@ -1,14 +1,74 @@
-# ROS 2 로봇 하드웨어 테스트
+<p align="center">
+  <img src="docs/images/robot-lineup.png" alt="기본 베이스, 적재함형, 로봇암형, 디스플레이형 모바일 로봇의 CAD 렌더링" width="960">
+</p>
 
-SSH에서 센서·모터·엔코더를 확인하는 ROS 2 Jazzy 워크스페이스입니다.
-최종 정리: **2026-11-05**. 현재 소스는 **Mega v8 / `signed_pwm_v1`**이며, 오른쪽 모터 전원선 극성을 바꾼 배선을 유지합니다.
+<h1 align="center">Oh My Control</h1>
+
+<p align="center">
+  <em>모바일 로봇 하드웨어 브링업 · Mega 1 kHz 모터 제어 · 구동/센서 캘리브레이션</em>
+</p>
+
+<p align="center">
+  <a href="#completed-robot">완성 사진</a> ·
+  <a href="#robot-video">주행 영상</a> ·
+  <a href="#quick-start">바로 실행</a> ·
+  <a href="#teleop-and-stop">키보드 조종</a> ·
+  <a href="#sensor-check">센서 검사</a> ·
+  <a href="#pid-and-autotune">PID 보정</a> ·
+  <a href="docs/motor_control_spec.md">모터 제어 명세</a> ·
+  <a href="docs/control_timing.md">제어 주기</a> ·
+  <a href="docs/imu_calibration.md">IMU 보정</a>
+</p>
+
+---
+
+**Oh My Control**은 선행 프로젝트인 [`Oh-My-MobileRobot`](https://github.com/Leehyunbin0131/Oh-My-MobileRobot)(로봇 하드웨어 제작 및 기구·URDF 설계)의 다음 단계로, **상위 ROS 2 자율주행 스택을 올리기 직전의 하드웨어 브링업(Bring-up)·저수준 제어 펌웨어·구동/센서 캘리브레이션**을 완성한 베이스라인 저장소입니다.
+
+로봇의 물리적 하드웨어(모터·엔코더·IMU·LiDAR·RealSense)가 의도한 제어 명령과 주행 물리 특성대로 정확히 동작하는지 **ROS 2 노드 의존성 없이 독립적으로 검증·보정**하는 데 초점을 맞추고 있습니다.
+
+| 단계 | 저장소 | 핵심 역할 |
+| :--- | :--- | :--- |
+| **Step 1. 기구·모델링** | [`Oh-My-MobileRobot`](https://github.com/Leehyunbin0131/Oh-My-MobileRobot) | 로봇 하드웨어 설계/제작, CAD 및 URDF 모델 정의 |
+| **Step 2. 제어·보정 (현재)** | **`Oh-My-Control`** | **Mega 1 kHz 속도/위치 유지 제어 펌웨어, 모터/IMU 보정, 센서 통합 진단** |
+| **Step 3. 자율주행** | 차기 ROS 2 Sim & Bringup | Step 2의 보정값·프로토콜(`OMR1`) 기반 ROS 2 드라이버 및 SLAM/Nav2 자율주행 |
+
+<a id="completed-robot"></a>
+
+## 실제 완성 모습
+
+<p align="center">
+  <img src="docs/images/photos/completed-front.jpg" alt="상판에 라이다와 전면에 카메라가 장착된 완성 로봇의 전면 사진" width="600"><br>
+  <sub>완성된 기본 베이스의 전면</sub>
+</p>
+
+| 전면 사시 | 측면·상판 |
+| :---: | :---: |
+| ![완성 로봇의 전면 사시 사진](docs/images/photos/completed-angle.jpg) | ![완성 로봇의 측면과 상판 사진](docs/images/photos/completed-side.jpg) |
+
+<a id="robot-video"></a>
+
+### 주행 영상
+
+<table align="center"><tr><td>
+
+https://github.com/user-attachments/assets/bb98cf7c-ee6c-49f0-b458-9154ca7bda5a
+
+</td></tr></table>
+
+<p align="center">
+  <sub>저장소 내 원본 영상 파일: <a href="docs/videos/robot-driving.mp4"><code>docs/videos/robot-driving.mp4</code></a></sub>
+</p>
+
+## 제어·검증 요약
+
+최종 정리: **2026-11-06**. 현재 소스는 **Mega v8 / `signed_pwm_v1`**이며, 오른쪽 모터 전원선 극성을 바꾼 배선을 유지합니다.
 기본 목표는 **72 RPM**, 실측 보정한 주행 상한은 **95 RPM**, MCU의 절대 목표·과속 보호 기준은 **100 RPM**입니다. PID 계산은 Mega에서 실제 1000 Hz로 실행합니다.
 
 **무부하 PID 재보정·오토튠과 주행·0 RPM 제동 검증을 완료했습니다.**
 오토튠 36개 실험 묶음과 최종 18조건을 통과했습니다. 최대 평균 속도 오차는 0.39 RPM이며 `config/motor_pid.json`에 검증된 계수를 저장했습니다.
 위치 유지는 `hold.enabled=true`입니다. **목표 0을 적용하는 첫 제어 주기에 현재 위치를 저장하고 즉시 HOLD에 진입합니다.** 직접 위치 P와 속도 피드백, PWM 상한 350을 사용합니다. 같은 유지 계수의 정지 상태 저항력은 2026-11-05 사용자 수동 시험으로 확인했습니다. 즉시 진입 변경판도 업로드했으며, 실제 주행 중 제동은 사용자 확인 대기입니다.
 
-기존 주행·제동 검증 근거: [재보정·오토튠 결과](reports/pid_recalibration_v8_20261105_124619/summary.json). 바퀴를 띄운 상태에서 검증했으며 지면 주행·위치 유지 검증은 별도입니다.
+기존 주행·제동 검증 근거: 로컬 원본 보고서 `reports/pid_recalibration_v8_20261105_124619/summary.json` (18조건 실측 수치와 오토튠 비교 결과는 [config/motor_pid.json](config/motor_pid.json)에 내장). 바퀴를 띄운 상태에서 검증했으며 지면 주행·위치 유지 검증은 별도입니다.
 변경 내용과 검증 기준: [모터 제어 명세서](docs/motor_control_spec.md).
 제어 주기 결정과 무구동 통신 비교: [제어·통신 주기 기준](docs/control_timing.md). 현재 **PID 1000 Hz·목표 송신 50 Hz·상태 수신 20 Hz를 유지**합니다. Nav2는 ROS 연동 후 SLAM 동시 실행 상태에서 **20·30·50 Hz를 비교**해 결정합니다. 아직 ROS 모터 어댑터·오도메트리·Nav2 연동은 구현하지 않았습니다.
 
@@ -23,6 +83,8 @@ git submodule update --init --recursive
 
 `src/rplidar_ros`는 검증 당시 커밋으로 고정한 서브모듈입니다. 소스·설정·문서는 Git으로 관리하고, `reports/`, `build/`, `install/`, `log/`, `.tools/`와 전체 백업은 로봇에 보관합니다. 문서의 `reports/` 링크는 로봇의 원본 워크스페이스에서 확인할 수 있습니다. 새 기기에서는 ROS·센서 라이브러리와 Arduino 도구 설치 및 빌드가 별도로 필요합니다.
 
+<a id="quick-start"></a>
+
 ## 바로 실행
 
 로봇에 SSH로 접속한 뒤 실행합니다. 아래 프로그램은 하나씩 사용하세요.
@@ -36,6 +98,8 @@ cd ~/ros2_dev_ws
 
 기본 의존성은 이 기기에 설치되어 있습니다. Python 도구는 바로 실행하며, IMU 보정용 카메라 수집기는 필요할 때 자동 빌드합니다.
 SSH 명령에서 바로 실행할 때는 `ssh -t hyunlee@로봇주소 'cd ~/ros2_dev_ws && ./hardware_tui.sh'`처럼 터미널을 할당합니다.
+
+<a id="teleop-and-stop"></a>
 
 ## 키보드 조종과 정지
 
@@ -73,6 +137,8 @@ USB 연결로 Mega가 재부팅되면 오류 기록도 초기화되지만, 새 �
 
 직접 PWM 진단도 최대 650으로 제한합니다. 측정 속도가 100 RPM을 초과한 상태가 100 ms 지속되면 과속 오류로 해제합니다.
 100 RPM은 명령 상한이며 순간적인 실제 속도 초과까지 막는 보장은 아닙니다. 실측에서 100 RPM 목표는 오른쪽 과속 보호가 동작해, 검증된 주행 범위를 95 RPM까지로 정했습니다. 지면 정지 거리·방향 변화는 별도 검증이 필요합니다.
+
+<a id="sensor-check"></a>
 
 ## 센서·엔코더 검사
 
@@ -136,6 +202,8 @@ USB 장치는 `/dev/serial/by-id/` 경로를 사용합니다. 공통 장치 인�
 호스트가 실제 전진을 양수로 변환합니다. 펌웨어의 PID 피드백 부호는 드라이버 `[L, R]` 순서로 `[+1, -1]`입니다.
 드라이버 매뉴얼은 [NT-S-DCDM1210.pdf](NT-S-DCDM1210.pdf)에 있습니다.
 
+<a id="pid-and-autotune"></a>
+
 ## PID 보정과 오토튠
 
 PID 계산은 Mega Timer1에서 **1000 Hz / 1 ms**로 실행합니다. I²C 출력 전송 주기는 이 계산 주기와 별개입니다.
@@ -184,6 +252,25 @@ Wi-Fi 비밀번호와 SSH 계정 인증은 별개입니다. 핫스팟으로 전�
 현재 기기의 펌웨어 도구 설치 위치는 `.tools/arduino/`이며, CLI와 AVR 코어가 설치되어 있습니다.
 CLI는 `bin/`, AVR 코어는 `arduino-cli.yaml`이 가리키는 `data/`를 사용합니다.
 
+새 보드나 초기화된 환경에서 도구를 재설치할 때는 아래 순서로 준비합니다:
+
+```bash
+# 1. Python 의존성
+/usr/bin/python3 -m pip install pyserial numpy Pillow wcwidth
+
+# 2. 로컬 Arduino CLI 및 AVR 코어 (.tools/arduino)
+mkdir -p .tools/arduino/bin .tools/arduino/data .tools/arduino/downloads .tools/arduino/sketchbook
+curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=.tools/arduino/bin sh
+cat > .tools/arduino/arduino-cli.yaml << 'EOF'
+ directories:
+   data: .tools/arduino/data
+   downloads: .tools/arduino/downloads
+   user: .tools/arduino/sketchbook
+EOF
+./.tools/arduino/bin/arduino-cli --config-file .tools/arduino/arduino-cli.yaml core update-index
+./.tools/arduino/bin/arduino-cli --config-file .tools/arduino/arduino-cli.yaml core install arduino:avr
+```
+
 ```bash
 ./mega_firmware.sh build         # 현재 I²C 펌웨어 빌드만 수행
 ./mega_firmware.sh upload        # 모터 전원을 끄고, 장치 사용 프로그램 종료 후 업로드
@@ -191,7 +278,7 @@ CLI는 `bin/`, AVR 코어는 `arduino-cli.yaml`이 가리키는 `data/`를 사�
 ```
 
 자동 테스트는 가상 시리얼·모터 모델과 C++ 코어를 사용하며 실제 모터를 구동하지 않습니다.
-전체 검사 결과는 [이전 유지력 개선판 기록](reports/motor_hold_stiffness_20261105/summary.json)에 보관합니다. 즉시 HOLD 변경은 첫 제어 주기 진입, 반복 명령의 기준 보존, 재출발·출력 해제에 한정해 검증합니다.
+전체 검사 결과는 로컬 보고서 `reports/motor_hold_stiffness_20261105/summary.json`에 보관합니다. 즉시 HOLD 변경은 첫 제어 주기 진입, 반복 명령의 기준 보존, 재출발·출력 해제에 한정해 검증합니다.
 공식 라이다만 실행하려면 대시보드를 종료한 뒤 `./lidar_official.sh`를 사용합니다.
 라이다를 다시 빌드할 때는 다음을 실행합니다.
 
@@ -200,27 +287,29 @@ source /opt/ros/jazzy/setup.bash
 colcon build --packages-select rplidar_ros --symlink-install --allow-overriding rplidar_ros
 ```
 
-## 파일과 기록
+## 문서와 파일
 
-| 경로 | 용도 |
+| 문서 · 경로 | 제공 내용 |
 | --- | --- |
-| 루트의 `*.sh` | 센서 검사, 조종, 보정, 펌웨어, 핫스팟 실행 진입점 |
-| `tools/`, `firmware/mega_motor_test/`, `tests/` | 현재 Python 도구, Mega 소스, 자동 테스트 |
-| `config/` | 방향·PID 설정과 적용 전 IMU 자이로 보정값 |
-| `src/rplidar_ros/`, `resources/` | 공식 라이다 소스, 표시용 URDF·라이선스 |
-| `reports/` | 센서·모터 실측 JSON, 원본 로그와 과거 실험 기록 |
-| `build/`, `install/`, `log/`, `.tools/` | 현재 빌드 결과, ROS 실행 환경, 빌드 로그, 로컬 도구 |
+| [모터 제어 명세서](docs/motor_control_spec.md) | Mega v8 속도 PID, 즉시 HOLD 제동·위치 유지, `OMR1` 시리얼 프로토콜 및 검증 수치 |
+| [제어·통신 주기 기준](docs/control_timing.md) | 1 kHz PID·50 Hz 목표 송신·20 Hz 텔레메트리 주기 기준 및 UART 링크 프로파일링 |
+| [IMU 보정 문서](docs/imu_calibration.md) | 외장 HFI-A9·RealSense D435IF 정지 자이로 영점 보정 절차 및 실측 결과 |
+| [구동 방향 설정](config/drive_calibration.json) · [PID 설정](config/motor_pid.json) · [IMU 보정값](config/imu_calibration.json) | 좌우 바퀴·엔코더 부호 매핑, 18조건 검증 통과 PID 계수, IMU 자이로 바이어스 |
+| 루트의 `*.sh` · `tools/` · `firmware/mega_motor_test/` · `tests/` | 센서 검사·조종·보정·펌웨어·핫스팟 실행 진입점, Python 도구, Mega 펌웨어, 103개 자동 테스트 |
+| `docs/images/`, `docs/videos/`, `src/rplidar_ros/`, `resources/` | 완성 사진·주행 영상(`robot-driving.mp4`), 공식 라이다 소스, 표시용 URDF·모델 라이선스 |
 
-현재 검증 결과는 [보고서 안내](reports/README.md)에 모았습니다. 과거 보고서는 당시 버전의 이력이며 현재 성능으로 간주하지 않습니다.
+로컬 검증 결과 안내서는 `reports/README.md`에 모았습니다. 과거 보고서는 당시 버전의 이력이며 현재 성능으로 간주하지 않습니다.
 전체 작업 백업은 워크스페이스 밖 `~/robot_backups/`에 저장합니다. 압축 파일과 SHA-256 체크섬을 함께 보관하며, 빌드 환경과 원본 보고서도 포함합니다.
 
-## 다음 개발
+## 다음 개발 (차기 ROS 2 자율주행 단계)
 
 1. 바퀴 반지름·윤거·실제 엔코더 CPR을 측정하고 ROS 2 모터 어댑터와 엔코더 오도메트리를 연결합니다.
 2. 센서·SLAM·Nav2 동시 실행 상태에서 Nav2 20·30·50 Hz를 비교합니다. 명령 지연, 데이터 나이, 주기 누락과 실제 경로 추종 오차를 기록합니다.
 3. 사용자가 지면 정지 거리·방향 변화와 위치 유지를 시험합니다. 결과를 기록하기 전까지 위치 유지의 실기 검증 상태는 미완료로 둡니다.
 4. 메가의 실제 실행 여유가 부족할 때만 PID 500 Hz를 별도 비교합니다. 시간 계산과 필터를 수정하고 다시 검증하며, Nav2 주기와 동시에 변경하지 않습니다.
 
-하드웨어·모델 출처: [Oh-My-MobileRobot](https://github.com/Leehyunbin0131/Oh-My-MobileRobot).
-라이다 출처: [Slamtec/rplidar_ros](https://github.com/Slamtec/rplidar_ros/tree/ros2), 로컬 참조 커밋 `24cc9b6dea97e045bda1408eaa867ce730fd3fc3`.
-모델의 라이선스·고지는 [LICENSE.robot-model](resources/LICENSE.robot-model), [NOTICE.robot-model](resources/NOTICE.robot-model)에 보존했습니다.
+## 라이선스
+
+저장소의 펌웨어, 제어·보정 도구, 테스트 및 문서에는 [Apache-2.0](LICENSE)을 적용합니다.
+하드웨어·모델 출처는 [Oh-My-MobileRobot](https://github.com/Leehyunbin0131/Oh-My-MobileRobot)이며, 모델의 라이선스([CERN-OHL-P-2.0](resources/LICENSE.robot-model))와 고지([NOTICE.robot-model](resources/NOTICE.robot-model))를 보존했습니다.
+라이다 서브모듈 출처: [Slamtec/rplidar_ros](https://github.com/Slamtec/rplidar_ros/tree/ros2), 로컬 참조 커밋 `24cc9b6dea97e045bda1408eaa867ce730fd3fc3`.

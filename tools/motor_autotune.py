@@ -201,7 +201,10 @@ class Experiment:
         self.history = []
 
     def run(self, document, sign, label, rpms):
-        settings = PIDSettings(document, self.client.calibration, require_validated=False)
+        trial_doc = copy.deepcopy(document)
+        if 'hold' in trial_doc:
+            trial_doc['hold']['enabled'] = False
+        settings = PIDSettings(trial_doc, self.client.calibration, require_validated=False)
         folder = self.report / 'experiments' / f'{len(self.history):03d}_{label}'
         folder.mkdir(parents=True)
         save(folder / 'settings.json', document['wheels'])

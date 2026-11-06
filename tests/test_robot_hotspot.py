@@ -46,6 +46,8 @@ class HotspotTests(unittest.TestCase):
         self.assertIn('ssh hyunlee@10.42.0.1', self.messages.getvalue())
         self.assertIn('현재 SSH 접속: ssh hyunlee@192.168.0.37', self.messages.getvalue())
         self.assertIn('12345678', self.messages.getvalue())
+        self.assertNotIn('test-secret', self.messages.getvalue())
+        self.assertIn('마스킹됨', self.messages.getvalue())
 
     def test_boot_only_does_not_schedule_or_activate(self):
         with redirect_stdout(self.messages):

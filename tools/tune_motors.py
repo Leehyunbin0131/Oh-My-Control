@@ -2,6 +2,7 @@
 """Measure unloaded motor response, fit PI + feedforward, validate and save."""
 
 import argparse
+import copy
 from datetime import datetime
 import json
 from pathlib import Path
@@ -104,7 +105,10 @@ def candidate(trials, calibration, report, *, period_ms=1):
 
 
 def validate(client, settings, report, targets=None):
-    settings.configure(client)
+    trial_doc = copy.deepcopy(settings.document)
+    if 'hold' in trial_doc:
+        trial_doc['hold']['enabled'] = False
+    PIDSettings(trial_doc, settings.calibration, require_validated=False).configure(client)
     trials = []
     if targets is None:
         targets = [(n, n) for n in (30, 50, 72, settings.max_rpm, -30, -50, -72, -settings.max_rpm)]
@@ -203,6 +207,12 @@ def main():
     try:
         calibration = DriveCalibration.load(args.calibration)
         initial = PIDSettings.load(args.pid_config, calibration).document if args.autotune else None
+        existing = initial
+        if existing is None and args.output.exists():
+            try:
+                existing = PIDSettings.load(args.output, calibration, require_validated=False).document
+            except Exception:
+                existing = None
         with MotorClient(args.port, report, calibration=calibration) as client:
             result['firmware'] = client.info
             if not client.info.get('stream_supported'):
@@ -237,9 +247,23 @@ def main():
             if client.receive_diagnostic and any(client.receive_diagnostic[k] for k in ('frame_errors', 'crc_errors', 'sequence_errors')):
                 raise MotorError('보정 중 명령 수신 오류가 기록되었습니다.')
         doc['validated'] = True
-        doc['validation_status'] = {'driving': True, 'braking': True, 'holding': False, 'ground': False}
-        doc['hold']['enabled'] = False
-        doc['conditions'] = 'v8 unloaded driving and zero-speed braking; hold and ground validation pending'
+        prev_status = (existing or {}).get('validation_status', {})
+        doc['validation_status'] = {
+            'driving': True,
+            'braking': True,
+            'holding': bool(prev_status.get('holding', False)),
+            'ground': bool(prev_status.get('ground', False)),
+        }
+        if existing and 'hold' in existing:
+            doc['hold'] = copy.deepcopy(existing['hold'])
+        else:
+            doc['hold']['enabled'] = False
+        if existing and 'hold_validation' in existing:
+            doc['hold_validation'] = copy.deepcopy(existing['hold_validation'])
+        doc['conditions'] = (existing or {}).get(
+            'conditions',
+            'v8 unloaded driving and zero-speed braking; hold and ground validation pending',
+        )
         doc['validated_at'] = datetime.now().astimezone().isoformat()
         doc['validation'] = [{k: v for k, v in t.items() if k not in ('samples', 'stopped')} for t in checks]
         PIDSettings(doc, calibration)
