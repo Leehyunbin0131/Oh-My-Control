@@ -9,10 +9,11 @@
 </p>
 
 <p align="center">
+  <a href="#overview">프로젝트 구성</a> ·
   <a href="#driving-demo">주행 영상</a> ·
   <a href="#architecture">시스템 구조</a> ·
   <a href="#quick-start">바로 실행</a> ·
-  <a href="#teleop-and-hold">주행 · 위치 유지 제어</a> ·
+  <a href="#teleop-and-hold">주행 · 위치 유지</a> ·
   <a href="#tui-and-diagnostics">센서 진단 · TUI</a> ·
   <a href="#calibration">구동 · IMU 보정</a> ·
   <a href="#firmware-and-network">펌웨어 · 네트워크</a> ·
@@ -21,11 +22,28 @@
 
 ---
 
-**Oh My Control**은 [`Oh-My-MobileRobot`](https://github.com/Leehyunbin0131/Oh-My-MobileRobot)에서 설계·제작한 모바일 로봇 베이스의 **구동 제어 펌웨어, 센서·구동 보정 파이프라인, 온보드 진단 도구**를 담은 저장소입니다.
+**Oh My Control**은 [`Oh-My-MobileRobot`](https://github.com/Leehyunbin0131/Oh-My-MobileRobot) 하드웨어 베이스를 실제로 움직이고 점검하기 위한 **1 kHz 실시간 모터 제어 펌웨어, 센서·구동 보정 파이프라인, 온보드 터미널 진단(TUI) 도구** 저장소입니다.
 
-상위 ROS 2 자율주행 스택을 결합하기 전 단계로서, 로봇의 하위 제어기(Arduino Mega 2560)와 온보드 센서(RPLIDAR A2M12, RealSense D435i, HFI-A9 IMU)가 물리적 제어 명령과 좌표계 기준대로 동작하도록 보정하고 검증하는 역할을 담당합니다.
+상위 ROS 2 자율주행 스택을 올리기 전에, 로봇의 하위 제어기(**Arduino Mega 2560**)와 온보드 센서(**RPLIDAR A2M12, RealSense D435i, HFI-A9 IMU**)가 목표 속도와 좌표계 기준대로 정확히 동작하도록 제어·보정·검증합니다.
 
-메가 펌웨어와 Orin 기본 구동 인터페이스의 구현을 완료했으며, 2026-11-12 사용자가 무부하·지면에서 전후진·회전·정지·재출발이 정상임을 확인했습니다. 코드 구조와 검증 범위는 [구동 계층과 검증](docs/control_rebuild.md)에 정리했습니다.
+### 핵심 기능
+
+- **1 kHz 폐루프 모터 제어 (`Arduino Mega 2560`)**: 20 kHz 구적 엔코더 샘플링, 바퀴별·방향별 속도 PID 제어, 정지 위치 유지(`HOLD`), 300 ms 명령 유효기간(Watchdog) 및 과속·포화 차단
+- **키보드 수동 주행 (`./teleop.sh`)**: Jetson Orin에서 직진·곡선 주행·제자리 회전·정지 위치 유지를 즉시 실행하고 목표 RPM 또는 개루프 PWM 응답을 확인
+- **통합 센서 점검 및 3D 터미널 대시보드 (`./check_sensors.sh`, `./hardware_tui.sh`)**: 별도 GUI 모니터 없이 SSH 터미널만으로 라이다·RGB-D 카메라·IMU·모터 상태를 실시간 시각화
+- **모터 PID · IMU 자동 보정 (`./tune_motors.sh`, `./calibrate_imu.sh`)**: 구간별 PWM-RPM 특성 측정 및 계단 응답 기반 PID 오토튠, 정지 자이로 영점 바이어스 추정·검증
+
+<a id="overview"></a>
+
+## 전체 프로젝트 구성 (Oh My MobileRobot 생태계)
+
+본 로봇 프로젝트는 **기구 설계 → 하위 제어·보정 → 상위 ROS 2 자율주행**의 3단계 저장소로 구성되어 있습니다.
+
+| 단계 | 저장소 | 담당 역할 및 주요 내용 |
+| --- | --- | --- |
+| **1. 하드웨어 · 모델** | [`Oh-My-MobileRobot`](https://github.com/Leehyunbin0131/Oh-My-MobileRobot) | 2020 프로파일 프레임, 3D 프린팅 외장 CAD·STL·도면, 구매 부품(BOM), ROS 1/2 URDF 모델 |
+| **2. 하위 제어 · 진단** | **`Oh-My-Control`** *(현재 저장소)* | Arduino Mega 1 kHz 폐루프 모터 제어 펌웨어, 모터 PID·IMU 정지 보정, Jetson Orin 수동 조종 및 터미널 진단(TUI) |
+| **3. 자율주행 (SLAM · Nav2)** | [`Oh_My_SLAM`](https://github.com/Leehyunbin0131/Oh_My_SLAM) | 구동 제어기–ROS 2 브리지, Gazebo 시뮬레이션, 실물 2D SLAM(`slam_toolbox` / `AMCL`) 및 `Nav2` 자율주행 통합 |
 
 <a id="driving-demo"></a>
 
@@ -134,8 +152,8 @@ cd Oh-My-Control
 | `Ctrl+C` / `Ctrl+D` | 감속 정지 후 출력 해제 및 종료 |
 
 * **속도 지정 및 개루프 진단**: `./teleop.sh --rpm 50`으로 목표 RPM을 변경할 수 있으며, `./teleop.sh --pwm 180`은 피드백 제어 없이 PWM을 직접 인가합니다. `--key-timeout 0.6`을 지정하면 키 입력이 없을 때 자동으로 정지합니다.
-* **정지 위치 유지(`HOLD`)**: 정지 명령(`SET_SPEED 0 0`)이 적용되는 첫 제어 주기에 현재 엔코더 카운트를 기준 위치로 저장하고 `HOLD` 상태로 전환합니다. 직접 위치 비례항(18 PWM/count)과 유지 전용 속도 피드백(Kp 8.0, Ki 0.0, PWM 상한 350)으로 제동 및 정지 위치를 유지합니다.
-* **명령 유효기간과 보호 동작**: 목표 속도의 유효기간(Lease)은 300 ms입니다. 통신 단절, 과속(100 RPM 초과 100 ms 지속), 위치 유지 이탈 한도(100 counts) 또는 출력 포화(1000 ms)가 발생하면 즉시 출력을 차단하고 오류 코드를 기록합니다. 원인을 해소한 뒤 `./teleop.sh --clear-fault`로 해제합니다.
+* **정지 위치 유지(`HOLD`)**: 정지 명령(`SET_SPEED 0 0`)이 적용되면 그 시점의 엔코더 위치를 기준으로 밀림을 억제하는 `HOLD` 제어가 작동합니다. 세부 게인과 상태 전환 규격은 [모터 제어 명세](docs/motor_control_spec.md)에 정의되어 있습니다.
+* **명령 유효기간과 보호 동작**: 목표 속도의 유효기간(Lease)은 **300 ms**입니다. 통신 단절, 과속, 위치 유지 이탈 한도 초과, 출력 포화가 발생하면 즉시 출력을 차단하고 오류 코드를 기록하며, 원인을 해소한 뒤 `./teleop.sh --clear-fault`로 해제합니다.
 
 <a id="tui-and-diagnostics"></a>
 
