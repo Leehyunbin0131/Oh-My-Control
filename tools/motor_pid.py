@@ -4,7 +4,7 @@ import json
 import math
 from pathlib import Path
 
-from motor_test import MotorError, CONTROL_MODEL, MAX_RPM
+from motor_link import MotorError, CONTROL_MODEL, MAX_RPM
 
 DEFAULT_PID_CONFIG = Path(__file__).resolve().parents[1] / 'config/motor_pid.json'
 COUNTS_PER_REV = 2652

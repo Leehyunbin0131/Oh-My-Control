@@ -84,13 +84,13 @@ class KeyTests(unittest.TestCase):
 
 
 class ControllerTests(unittest.TestCase):
-    def test_pid_in_place_limit_preserves_lower_speed_and_forward_target(self):
+    def test_pid_in_place_limit_preserves_selected_forward_speed(self):
         client = FakeClient()
         settings = PIDSettings(pid_document(client.calibration), client.calibration)
         controller = Controller(client, pid_settings=settings)
         for index, (key, expected) in enumerate([
-            ('a', (-5000, 5000)), ('+', (-5000, 5000)),
-            ('d', (5000, -5000)), ('w', (7400, 7400)),
+            ('a', (-3000, 3000)), ('+', (-3000, 3000)),
+            ('d', (3000, -3000)), ('w', (7400, 7400)),
         ]):
             now = 10 + index * .05
             controller.keys([key], now)
@@ -98,7 +98,7 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(controller.active, expected)
         controller.keys(['-'] * 17 + ['a'], 10.2)
         self.step(controller, client, 10.2)
-        self.assertEqual(controller.active, (-4000, 4000))
+        self.assertEqual(controller.active, (-3000, 3000))
         controller.keys(['stop'], 10.25)
         self.step(controller, client, 10.25)
         self.assertEqual(client.calls[-1], ('SET_SPEED', 0, 0, 300))
@@ -330,7 +330,7 @@ class TerminalIntegrationTests(unittest.TestCase):
                 try:
                     self.wait_for(session, lambda: b'READY / STOPPED' in session.output, 6)
                     magnitude, inner = (7200, 3600) if pid else (493, 247)
-                    turn = 5000 if pid else magnitude
+                    turn = 3000 if pid else magnitude
                     for key, expected in [('w', [-magnitude, -magnitude]), ('x', [magnitude, magnitude]),
                                           ('a', [turn, -turn]), ('d', [-turn, turn]),
                                           ('q', [-inner, -magnitude]), ('e', [-magnitude, -inner]),

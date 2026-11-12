@@ -12,7 +12,7 @@ import statistics
 import time
 
 from drive_calibration import DriveCalibration, DEFAULT_CALIBRATION
-from motor_test import MotorClient, MotorError, DEFAULT_MOTOR_PORT
+from motor_link import MotorClient, MotorError, DEFAULT_MOTOR_PORT
 from motor_pid import PIDSettings, DEFAULT_PID_CONFIG, COUNTS_PER_REV, fit_feedforward, control_defaults
 
 WORKSPACE = Path(__file__).resolve().parents[1]

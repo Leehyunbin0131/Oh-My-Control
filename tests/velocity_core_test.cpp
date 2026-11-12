@@ -204,6 +204,57 @@ int main() {
     if(kind==4) { for(int t=1;t<150;++t) assert(!v.update(c,bad,t)); c[0]+=11; assert(!v.update(c,bad,150)); c[0]+=10; assert(v.update(c,bad,151)==HOLD_LIMIT); }
     if(kind==5) { for(int t=1;t<500&&!fault;++t) { c[0]+=5; fault=v.update(c,bad,t); } assert(fault==OVERSPEED); }
   }
+  // A changing 50 Hz target must still detect sustained reverse motion and
+  // unreachable speed. Encoder edges keep these cases distinct from a stall.
+  for(int direction:{-1,1}) for(bool wrongDirection:{false,true}) {
+    VelocityControl v; configure(v); uint32_t c[2]={0,0}, bad[2]={0,0};
+    if(!wrongDirection)
+      for(int sign:{-1,1}) assert(v.configure(0,sign,20,0,0,20,200));
+    v.start(direction*7200,0,c,bad,0);
+    uint8_t fault=0;
+    int elapsed=0;
+    for(int t=1;t<=2100&&!fault;++t) {
+      if(t%20==0) assert(v.setTargets(direction*(7200+(t/20%2)*100),0,t));
+      c[0]+=wrongDirection?-direction:direction;
+      fault=v.update(c,bad,t); elapsed=t;
+    }
+    assert(fault==(wrongDirection?SPEED_DIRECTION:SPEED_UNREACHABLE));
+    assert(elapsed<=(wrongDirection?650:2050));
+  }
+  // A reversal gets its own direction grace period, even when the previous
+  // motion was already close to the wrong-direction fault threshold.
+  for(int direction:{-1,1}) {
+    VelocityControl v; configure(v); uint32_t c[2]={0,0}, bad[2]={0,0};
+    v.start(direction*7200,0,c,bad,0);
+    for(int t=1;t<=550;++t) { c[0]-=direction; assert(!v.update(c,bad,t)); }
+    assert(v.setTargets(-direction*7200,0,550));
+    for(int t=551;t<=1100;++t) { c[0]+=direction; assert(!v.update(c,bad,t)); }
+    // Stop/restart must likewise begin a new interval.
+    assert(v.setTargets(0,0,1100));
+    assert(!v.update(c,bad,1101));
+    assert(v.setTargets(-direction*7200,0,1101));
+    for(int t=1102;t<=1651;++t) { c[0]+=direction; assert(!v.update(c,bad,t)); }
+    uint8_t fault=0;
+    for(int t=1652;t<=1751&&!fault;++t) { c[0]+=direction; fault=v.update(c,bad,t); }
+    assert(fault==SPEED_DIRECTION);
+  }
+  // Saturation from an earlier drive must not shorten the next drive's
+  // allowed interval after a zero command or a commanded reversal.
+  for(int direction:{-1,1}) {
+    VelocityControl v; configure(v); uint32_t c[2]={0,0}, bad[2]={0,0};
+    for(int sign:{-1,1}) assert(v.configure(0,sign,20,0,0,20,200));
+    v.start(direction*7200,0,c,bad,0);
+    for(int t=1;t<=1500;++t) { c[0]+=direction; assert(!v.update(c,bad,t)); }
+    assert(v.setTargets(0,0,1500));
+    for(int t=1501;t<=1600;++t) assert(!v.update(c,bad,t));
+    assert(v.setTargets(direction*7200,0,1600));
+    for(int t=1601;t<=3100;++t) { c[0]+=direction; assert(!v.update(c,bad,t)); }
+    assert(v.setTargets(-direction*7200,0,3100));
+    for(int t=3101;t<=4600;++t) { c[0]-=direction; assert(!v.update(c,bad,t)); }
+    uint8_t fault=0;
+    for(int t=4601;t<=5200&&!fault;++t) { c[0]-=direction; fault=v.update(c,bad,t); }
+    assert(fault==SPEED_UNREACHABLE);
+  }
   // Raw PWM uses the same physical overspeed guard, even without a configured PID.
   VelocityControl raw; uint32_t c[2]={0,0}, bad[2]={0,0}; raw.update(c,bad,0);
   uint8_t fault=0;

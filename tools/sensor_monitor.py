@@ -11,9 +11,11 @@ import time
 
 import numpy as np
 
-from check_sensors import check_serial_port, driver_process, ros_driver_spec
+from check_sensors import driver_process, ros_driver_spec
+from serial_port import check_serial_port
 from hfi_a9 import A9Decoder
-from motor_test import MotorClient, MotorCancelled, drive_test, bench_test, observation_result
+from motor_link import MotorClient, MotorCancelled
+from motor_test import drive_test, bench_test, observation_result
 from drive_calibration import calibration_for
 
 

@@ -17,11 +17,12 @@ import time
 import tty
 
 from drive_calibration import DEFAULT_CALIBRATION, DriveCalibration
-from motor_test import DEFAULT_MOTOR_PORT, MotorClient, MotorError
+from motor_link import DEFAULT_MOTOR_PORT, MotorClient, MotorError
 from motor_pid import DEFAULT_PID_CONFIG, PIDSettings
+from wheel_drive import WheelDrive
 
 WORKSPACE = Path(__file__).resolve().parents[1]
-IN_PLACE_RPM_LIMIT = 50.0
+IN_PLACE_RPM_LIMIT = 30.0
 DIRECTIONS = {
     'q': (0.5, 1), 'w': (1, 1), 'e': (1, 0.5),
     'a': (-1, 1), 'd': (1, -1),
@@ -125,6 +126,7 @@ class Controller:
         self.history = deque(maxlen=200)
         self.baseline = None
         self.previous_stamp = None
+        self.drive = WheelDrive(client, pid_settings) if pid_settings else None
 
     def keys(self, actions, now):
         # An emergency stop/quit wins over all direction bytes in the same read.
@@ -151,10 +153,11 @@ class Controller:
                         self.pwm = max(110, self.pwm - 10)
 
     def stop(self, reason):
-        if self.pid_settings and self.engaged:
-            self.client.set_speed(0, 0)
-            self.last_target_sent = time.monotonic()
-            operation = 'SET_SPEED 0 0'
+        if self.drive:
+            operation = 'SET_SPEED 0 0' if self.drive.engaged else 'STOP'
+            self.drive.stop()
+            self.engaged = self.drive.engaged
+            self.last_target_sent = self.drive.last_sent_at or 0
         else:
             self.client.command('STOP')
             operation = 'STOP'
@@ -166,6 +169,8 @@ class Controller:
         self.event({'event': 'stop', 'reason': reason, 'operation': operation})
 
     def _feedback(self, now):
+        if self.drive:
+            self.drive.check_feedback()
         sample = self.client.latest
         if sample is None or now - sample['received_at'] > 0.4:
             raise MotorError('엔코더 수신 중단: 조종을 종료합니다.')
@@ -206,21 +211,22 @@ class Controller:
         changed = desired != self.active
         if not self.engaged and not any(desired):
             return
-        if not self.engaged:
-            self.client.command('ARM')
-            self.engaged = True
         if changed:
             self.active = desired
-            self.output = self.pid_settings.commands(*desired)
             self.baseline = self.client.latest
             self.started = now
             self.history.clear()
             self.previous_stamp = None
             self.status = NAMES[self.direction] if self.direction else 'ZERO SPEED / HOLD IF ENABLED'
             self.event({'event': 'target', 'physical_rpm': [n / 100 for n in desired]})
-        if changed or now - self.last_target_sent >= .02:
-            self.client.set_speed(*self.output)
-            self.last_target_sent = now
+        # The keyboard owns the latched user intent; the common drive layer
+        # owns wire conversion, send timing and command/feedback expiry.
+        self.drive.set_target_rpm(*(value / 100 for value in desired))
+        self.drive.tick()
+        self.engaged = self.drive.engaged
+        self.active = self.drive.target_centi
+        self.output = self.drive.output[:]
+        self.last_target_sent = self.drive.last_sent_at or 0
 
     def step(self, now):
         if self.force_stop:

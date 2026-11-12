@@ -8,15 +8,15 @@ import json
 import math
 import os
 from pathlib import Path
-import shutil
 import signal
-import stat
 import subprocess
 import sys
 import time
 
 from hfi_a9 import A9Decoder
-from motor_test import DEFAULT_MOTOR_PORT, check_motors
+from motor_link import DEFAULT_MOTOR_PORT
+from motor_test import check_motors
+from serial_port import check_serial_port
 from drive_calibration import DEFAULT_CALIBRATION
 
 
@@ -73,21 +73,6 @@ class StreamStats:
             'last_valid_age_seconds': None if age is None else round(age, 3),
             'timestamp_errors': self.stamp_errors, 'sample': self.sample,
         }
-
-
-def check_serial_port(port):
-    path = Path(port)
-    if not path.exists():
-        raise RuntimeError(f'장치를 찾을 수 없습니다: {port} (USB 연결/전원 확인)')
-    if not stat.S_ISCHR(path.stat().st_mode):
-        raise RuntimeError(f'시리얼 장치 파일이 아닙니다: {port}')
-    if not os.access(path, os.R_OK | os.W_OK):
-        raise RuntimeError(f'시리얼 접근 권한이 없습니다: {port} (dialout 그룹 확인)')
-    if shutil.which('fuser'):
-        result = subprocess.run(['fuser', str(path.resolve())], capture_output=True,
-                                text=True, timeout=3)
-        if result.returncode == 0:
-            raise RuntimeError(f'다른 프로세스가 사용 중입니다: {port}, PID {result.stdout.strip()}')
 
 
 def check_imu(args, report_dir):

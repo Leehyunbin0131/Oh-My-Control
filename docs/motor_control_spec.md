@@ -25,7 +25,7 @@ Arduino Mega 2560과 NT-S-DCDM1210 모터 드라이버를 이용한 양륜 차�
 * **주행(`TRACK`)**: 바퀴별·회전 방향별 선형 피드포워드(`slope`, `offset`)와 속도 PID(`kp`, `ki`, `kd`)를 합산해 구동 PWM을 출력합니다.
 * **정지 및 위치 유지(`HOLD`)**: `SET_SPEED 0 0`을 수신한 첫 제어 주기에 현재 엔코더 카운트를 목표 위치(`holdReference`)로 저장하고 `HOLD` 상태로 전환합니다. 위치 오차에 직접 비례하는 PWM 항과 유지 전용 속도 피드백을 결합해 제동 및 정지 위치를 유지합니다.
 * **출력 해제(`STOP`)**: PID 및 위치 유지 제어를 즉시 해제하고 양쪽 모터 PWM을 0으로 설정합니다.
-* **오류 보호(`FAULT`)**: 통신 만료, 엔코더 배선 이상, 과속(100 RPM 초과 100 ms 지속), 위치 유지 한도 초과 시 즉시 출력을 차단하고 오류 코드를 기록합니다. 원인을 해소한 뒤 `CLEAR_FAULT` 명령으로 해제하기 전까지 재구동하지 않습니다.
+* **오류 보호(`FAULT`)**: 통신 만료, 엔코더 배선 이상, 과속(100 RPM 초과 100 ms 지속), 위치 유지 한도 초과 시 즉시 출력을 차단하고 오류 코드를 기록합니다. 원인을 해소한 뒤 `CLEAR_FAULT` 명령으로 해제하기 전까지 재구동하지 않습니다. 같은 방향의 RPM 갱신은 방향 오류·출력 포화 감시의 누적 시간을 초기화하지 않습니다.
 
 ### 위치 유지 (`HOLD`) 파라미터
 
@@ -55,15 +55,18 @@ Arduino Mega 2560과 NT-S-DCDM1210 모터 드라이버를 이용한 양륜 차�
 | `HOLD channel enable kp speed pwm deadband error duration saturation` | 위치 유지 활성화 및 안전 한도 설정 |
 
 > **호스트 파서 구현 시 좌/우 인덱스 규칙**:
-> `OMR1,T` 상태 텔레메트리 프레임에서 원시 엔코더 카운트(`counts`) 및 불효 전이(`invalid`) 필드는 **`[오른쪽(D40/41), 왼쪽(D50/51)]` 순서**(`ENC_INDEX = {'L': 1, 'R': 0}`)로 전송되며, 목표/측정 속도(`target_rpm_centi`, `measured_rpm_centi`)·출력(`command_pwm`)·제어 상태 필드는 **드라이버 `[왼쪽(L/M2), 오른쪽(R/M1)]` 순서**(`VEL_INDEX = {'L': 0, 'R': 1}`)로 전송됩니다. 상위 ROS 2 드라이버 작성 시 [`tools/motor_test.py`](../tools/motor_test.py)의 인덱스 매핑을 동일하게 적용합니다.
+> `OMR1,T` 상태 텔레메트리 프레임에서 원시 엔코더 카운트(`counts`) 및 무효 전이(`invalid`) 필드는 **`[오른쪽(D40/41), 왼쪽(D50/51)]` 순서**(`ENC_INDEX = {'L': 1, 'R': 0}`)로 전송되며, 목표/측정 속도(`target_rpm_centi`, `measured_rpm_centi`)·출력(`command_pwm`)·제어 상태 필드는 **드라이버 `[왼쪽(L/M2), 오른쪽(R/M1)]` 순서**(`VEL_INDEX = {'L': 0, 'R': 1}`)로 전송됩니다. 상위 ROS 2 드라이버 작성 시 [`tools/motor_link.py`](../tools/motor_link.py)의 인덱스 매핑을 동일하게 적용합니다.
 
 ## 구현 파일
 
 | 경로 | 역할 |
 | --- | --- |
+| [`tools/wheel_drive.py`](../tools/wheel_drive.py) | Orin의 물리적 좌우 RPM 명령, 명령 만료·송신 주기, 측정 피드백과 정지 |
 | [`firmware/mega_motor_test/velocity_core.h`](../firmware/mega_motor_test/velocity_core.h) | 속도 추정, 주행 PID, 0 RPM 감속 및 위치 유지(`HOLD`) 연산 코어 |
 | [`firmware/mega_motor_test/test_core.h`](../firmware/mega_motor_test/test_core.h) | 구동 허가 상태기, 명령 유효기간 및 오류 감시 |
 | [`firmware/mega_motor_test/mega_motor_test.ino`](../firmware/mega_motor_test/mega_motor_test.ino) | Timer1 인터럽트, 20 kHz 엔코더 샘플링, 시리얼 파서 및 I²C 출력 스케줄러 |
-| [`tools/motor_test.py`](../tools/motor_test.py) · [`tools/motor_pid.py`](../tools/motor_pid.py) | 시리얼 클라이언트, 설정 유효성 검사 및 단위 변환(`velocity_commands`, `joint_states`) |
+| [`tools/motor_link.py`](../tools/motor_link.py) · [`tools/serial_port.py`](../tools/serial_port.py) | 공통 시리얼 연결, OMR1 프레임·응답 처리, 장치 접근 검사 |
+| [`tools/motor_pid.py`](../tools/motor_pid.py) · [`tools/drive_calibration.py`](../tools/drive_calibration.py) | 설정 유효성 검사, 물리적 바퀴의 채널·부호와 단위 변환(`velocity_commands`, `joint_states`) |
+| [`tools/motor_test.py`](../tools/motor_test.py) | 모터·엔코더 진단 절차와 결과 판정 |
 | [`tools/keyboard_control.py`](../tools/keyboard_control.py) | 키보드 조종, 연속 목표 갱신 및 정지 제어 |
 | [`tools/tune_motors.py`](../tools/tune_motors.py) · [`tools/motor_autotune.py`](../tools/motor_autotune.py) | 피드포워드·PI 특성 측정 및 계단 응답 기반 PID 자동 탐색 도구 |

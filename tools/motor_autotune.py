@@ -14,7 +14,7 @@ import statistics
 import time
 
 from motor_pid import PIDSettings
-from motor_test import MotorError
+from motor_link import MotorError
 
 WHEELS = ('left', 'right')
 BOUNDS = {'kp': (0.25, 5.0), 'ki': (2.0, 25.0), 'kd': (0.0, 0.06)}

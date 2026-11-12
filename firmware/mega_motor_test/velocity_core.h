@@ -107,12 +107,16 @@ struct VelocityControl {
     const int16_t next[2]={l,r};
     for(uint8_t i=0;i<2;++i) {
       if(next[i]==target[i]) continue; // A lease renewal must never re-anchor HOLD.
-      if(!next[i]||sign(next[i])!=sign(target[i])) {
+      const bool directionChanged=sign(next[i])!=sign(target[i]);
+      if(directionChanged) {
         clearIntegral(i); derivative[i]=derivativeRemainder[i]=0;
+        // A stop or reversal starts a new motion interval. Same-direction RPM
+        // adjustments must not postpone direction/effort fault detection.
+        targetSince[i]=now; saturatedMs[i]=badDirectionMs[i]=0;
       }
       if(!target[i]&&next[i]) lastProgress[i]=now;
-      targetSince[i]=now; target[i]=next[i]; state[i]=next[i]?TRACK:ZERO_SPEED;
-      saturatedMs[i]=badDirectionMs[i]=0; positionError[i]=0; resetWindow(i,now);
+      target[i]=next[i]; state[i]=next[i]?TRACK:ZERO_SPEED;
+      positionError[i]=0; resetWindow(i,now);
       const Gains& g=gains[i][next[i]>0];
       const int32_t rpmQ8=divide<100>(static_cast<int32_t>(next[i])*256);
       feedforward[i]=next[i]?sign(next[i])*g.offset+shift<1>(g.slope*rpmQ8):0;

@@ -8,7 +8,7 @@ from pathlib import Path
 import statistics
 import time
 
-from motor_test import MotorClient, MotorError, DEFAULT_MOTOR_PORT, frame
+from motor_link import MotorClient, MotorError, DEFAULT_MOTOR_PORT, frame
 
 ROOT = Path(__file__).resolve().parents[1]
 
