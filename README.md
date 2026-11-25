@@ -22,22 +22,22 @@
 
 ---
 
-**Oh My Control**은 [`Oh-My-MobileRobot`](https://github.com/Leehyunbin0131/Oh-My-MobileRobot) 하드웨어 베이스를 실제로 움직이고 점검하기 위한 **1 kHz 실시간 모터 제어 펌웨어, 센서·구동 보정 파이프라인, 온보드 터미널 진단(TUI) 도구** 저장소입니다.
+**Oh My Control**은 [`Oh-My-MobileRobot`](https://github.com/Leehyunbin0131/Oh-My-MobileRobot) 하드웨어 베이스를 실제로 움직이고 점검하는 저장소입니다. **1 kHz 실시간 모터 제어 펌웨어, 센서·구동 보정 파이프라인, 온보드 터미널 진단(TUI) 도구**를 담고 있습니다.
 
-상위 ROS 2 자율주행 스택을 올리기 전에, 로봇의 하위 제어기(**Arduino Mega 2560**)와 온보드 센서(**RPLIDAR A2M12, RealSense D435i, HFI-A9 IMU**)가 목표 속도와 좌표계 기준대로 정확히 동작하도록 제어·보정·검증합니다.
+상위 ROS 2 자율주행 스택을 올리기 전에 로봇의 하위 제어기(**Arduino Mega 2560**)와 온보드 센서(**RPLIDAR A2M12, RealSense D435i, HFI-A9 IMU**)가 목표 속도와 좌표계 기준대로 정확히 동작하도록 제어와 보정, 검증을 맡습니다.
 
 ### 핵심 기능
 
-- **1 kHz 폐루프 모터 제어 (`Arduino Mega 2560`)**: 20 kHz 구적 엔코더 샘플링, 바퀴별·방향별 속도 PID 제어, 정지 위치 유지(`HOLD`), 300 ms 명령 유효기간(Watchdog) 및 과속·포화 차단
-- **키보드 수동 주행 (`./teleop.sh`)**: Jetson Orin에서 직진·곡선 주행·제자리 회전·정지 위치 유지를 즉시 실행하고 목표 RPM 또는 개루프 PWM 응답을 확인
-- **통합 센서 점검 및 3D 터미널 대시보드 (`./check_sensors.sh`, `./hardware_tui.sh`)**: 별도 GUI 모니터 없이 SSH 터미널만으로 라이다·RGB-D 카메라·IMU·모터 상태를 실시간 시각화
-- **모터 PID · IMU 자동 보정 (`./tune_motors.sh`, `./calibrate_imu.sh`)**: 구간별 PWM-RPM 특성 측정 및 계단 응답 기반 PID 오토튠, 정지 자이로 영점 바이어스 추정·검증
+- **1 kHz 폐루프 모터 제어 (`Arduino Mega 2560`)**: 20 kHz 구적 엔코더 샘플링, 바퀴별·방향별 속도 PID 제어, 정지 위치 유지(`HOLD`), 300 ms 명령 유효기간(Watchdog), 과속·포화 차단
+- **키보드 수동 주행 (`./teleop.sh`)**: Jetson Orin에서 직진, 곡선 주행, 제자리 회전, 정지 위치 유지를 바로 실행하고 목표 RPM이나 개루프 PWM 응답을 확인
+- **통합 센서 점검 및 3D 터미널 대시보드 (`./check_sensors.sh`, `./hardware_tui.sh`)**: 별도 GUI 모니터 없이 SSH 터미널만으로 라이다, RGB-D 카메라, IMU, 모터 상태를 실시간으로 시각화
+- **모터 PID · IMU 자동 보정 (`./tune_motors.sh`, `./calibrate_imu.sh`)**: 구간별 PWM-RPM 특성 측정, 계단 응답 기반 PID 오토튠, 정지 자이로 영점 바이어스 추정과 검증
 
 <a id="overview"></a>
 
 ## 전체 프로젝트 구성 (Oh My MobileRobot 생태계)
 
-본 로봇 프로젝트는 **기구 설계 → 하위 제어·보정 → 상위 ROS 2 자율주행**의 3단계 저장소로 구성되어 있습니다.
+이 로봇 프로젝트는 **기구 설계 → 하위 제어·보정 → 상위 ROS 2 자율주행** 3단계에 맞춰 저장소를 나눴습니다.
 
 | 단계 | 저장소 | 담당 역할 및 주요 내용 |
 | --- | --- | --- |
@@ -67,7 +67,7 @@ https://github.com/user-attachments/assets/bb98cf7c-ee6c-49f0-b458-9154ca7bda5a
 
 ## 제어 시스템 구조
 
-연산 계층은 상위 명령·센서 처리를 담당하는 **Jetson Orin Nano Super**와 실시간 폐루프 모터 제어를 전담하는 **Arduino Mega 2560**으로 분리되어 있습니다.
+연산은 두 장치가 나눠 맡습니다. **Jetson Orin Nano Super**는 상위 명령과 센서 처리를, **Arduino Mega 2560**은 실시간 폐루프 모터 제어를 전담합니다.
 
 ```mermaid
 flowchart LR
@@ -106,14 +106,14 @@ flowchart LR
 
 ### 바퀴 채널과 방향 매핑
 
-전방은 RealSense 카메라가 바라보는 방향이며, 좌우는 로봇 뒤에서 전방을 바라볼 때의 기준입니다. 오른쪽 모터는 전원선 극성을 반전한 배선을 사용합니다.
+전방은 RealSense 카메라가 바라보는 방향이고 좌우는 로봇 뒤에서 전방을 바라볼 때를 기준으로 합니다. 오른쪽 모터는 전원선 극성을 반대로 배선했습니다.
 
 | 실제 바퀴 | 드라이버 채널 | 엔코더 핀 (A / B) | 전진 명령 부호 | 전진 시 원시 엔코더 부호 |
 | --- | --- | --- | --- | --- |
 | 왼쪽 | L / M2 | D50 / D51 | − | − |
 | 오른쪽 | R / M1 | D40 / D41 | − | + |
 
-물리 방향과 채널 매핑은 [`config/drive_calibration.json`](config/drive_calibration.json)에 정의되어 있으며, 호스트 도구가 실제 전진 방향을 양수로 정규화합니다.
+물리 방향과 채널 매핑은 [`config/drive_calibration.json`](config/drive_calibration.json)에 정의되어 있고 호스트 도구가 실제 전진 방향을 양수로 정규화합니다.
 
 <a id="quick-start"></a>
 
@@ -126,7 +126,7 @@ git clone --recurse-submodules https://github.com/Leehyunbin0131/Oh-My-Control.g
 cd Oh-My-Control
 ```
 
-로봇에 접속한 뒤 용도에 맞는 실행 진입점을 사용합니다.
+로봇에 접속한 뒤 용도에 맞는 진입점 스크립트를 실행합니다.
 
 ```bash
 ./hardware_tui.sh --motors       # 센서·모터 통합 터미널 대시보드 (모터 비구동)
@@ -134,13 +134,13 @@ cd Oh-My-Control
 ./teleop.sh                      # 키보드 폐루프 PID 주행 조종 (기본 72 RPM)
 ```
 
-원격 SSH에서 대시보드를 바로 실행할 때는 `ssh -t hyunlee@<로봇주소> 'cd ~/ros2_dev_ws && ./hardware_tui.sh'`와 같이 의사 터미널(`-t`)을 할당합니다.
+원격 SSH에서 대시보드를 바로 실행할 때는 `ssh -t hyunlee@<로봇주소> 'cd ~/ros2_dev_ws && ./hardware_tui.sh'`처럼 의사 터미널(`-t`)을 할당합니다.
 
 <a id="teleop-and-hold"></a>
 
 ## 주행 조종과 정지 위치 유지 (`HOLD`)
 
-`./teleop.sh`는 방향키를 한 번 누르면 해당 목표 속도를 계속 유지하며, 정지 키(`s` 또는 `Space`)를 누르면 정지합니다.
+`./teleop.sh`에서는 방향키를 한 번 누르면 그 목표 속도를 계속 유지하고 정지 키(`s` 또는 `Space`)를 누르면 멈춥니다.
 
 | 키 | 동작 |
 | --- | --- |
@@ -151,9 +151,9 @@ cd Oh-My-Control
 | `+` / `-` | 목표 속도 2 RPM씩 증감 (`--pwm` 직접 출력 모드에서는 10씩 증감) |
 | `Ctrl+C` / `Ctrl+D` | 감속 정지 후 출력 해제 및 종료 |
 
-* **속도 지정 및 개루프 진단**: `./teleop.sh --rpm 50`으로 목표 RPM을 변경할 수 있으며, `./teleop.sh --pwm 180`은 피드백 제어 없이 PWM을 직접 인가합니다. `--key-timeout 0.6`을 지정하면 키 입력이 없을 때 자동으로 정지합니다.
-* **정지 위치 유지(`HOLD`)**: 정지 명령(`SET_SPEED 0 0`)이 적용되면 그 시점의 엔코더 위치를 기준으로 밀림을 억제하는 `HOLD` 제어가 작동합니다. 세부 게인과 상태 전환 규격은 [모터 제어 명세](docs/motor_control_spec.md)에 정의되어 있습니다.
-* **명령 유효기간과 보호 동작**: 목표 속도의 유효기간(Lease)은 **300 ms**입니다. 통신 단절, 과속, 위치 유지 이탈 한도 초과, 출력 포화가 발생하면 즉시 출력을 차단하고 오류 코드를 기록하며, 원인을 해소한 뒤 `./teleop.sh --clear-fault`로 해제합니다.
+* **속도 지정 및 개루프 진단**: `./teleop.sh --rpm 50`으로 목표 RPM을 바꿀 수 있고 `./teleop.sh --pwm 180`은 피드백 제어 없이 PWM을 직접 인가합니다. `--key-timeout 0.6`을 지정하면 키 입력이 없을 때 자동으로 정지합니다.
+* **정지 위치 유지(`HOLD`)**: 정지 명령(`SET_SPEED 0 0`)이 적용되면 그 시점의 엔코더 위치를 기준으로 밀림을 억제하는 `HOLD` 제어가 작동합니다. 세부 게인과 상태 전환 규격은 [모터 제어 명세](docs/motor_control_spec.md)에 있습니다.
+* **명령 유효기간과 보호 동작**: 목표 속도의 유효기간(Lease)은 **300 ms**입니다. 통신이 끊겨 유효기간이 만료되거나 과속, 위치 유지 이탈 한도 초과, 출력 포화가 발생하면 출력을 차단하고 오류 코드를 기록합니다. 원인을 해소한 뒤 `./teleop.sh --clear-fault`로 해제합니다.
 
 <a id="tui-and-diagnostics"></a>
 
@@ -169,10 +169,10 @@ cd Oh-My-Control
 ```
 
 * `camera`: RGB·깊이 영상 수신 주기와 내장 가속도계·자이로 스트림을 함께 검사합니다.
-* `encoders`: 측정 시간 동안 두 바퀴를 손으로 돌려 A/B 상 카운트 증가와 불효 전이 여부를 확인합니다.
+* `encoders`: 측정 시간 동안 두 바퀴를 손으로 돌려 A/B 상 카운트 증가와 무효 전이 여부를 확인합니다.
 * `drive` / `bench`: 바퀴를 공중에 띄운 상태에서 `./check_sensors.sh --sensors motors --motor-test drive`로 실제 구동 응답을 점검합니다.
 
-터미널 대시보드(`./hardware_tui.sh`)는 URDF 기반 3D 와이어프레임 자세, 카메라 컬러·깊이 문자 영상, 라이다 포인트 분포, 엔코더·모터 제어 상태를 실시간으로 렌더링합니다.
+터미널 대시보드(`./hardware_tui.sh`)는 URDF 기반 3D 와이어프레임 자세, 카메라 컬러와 깊이 문자 영상, 라이다 포인트 분포, 엔코더와 모터 제어 상태를 실시간으로 렌더링합니다.
 
 | 대시보드 키 | 동작 |
 | --- | --- |
@@ -187,7 +187,7 @@ cd Oh-My-Control
 
 ### 모터 피드포워드 및 PID 오토튠
 
-바퀴를 지면에서 띄운 상태에서 실행하며, 보정 결과와 검증 통계는 [`config/motor_pid.json`](config/motor_pid.json)에 기록됩니다.
+바퀴를 지면에서 띄운 상태에서 실행합니다. 보정 결과와 검증 통계는 [`config/motor_pid.json`](config/motor_pid.json)에 기록됩니다.
 
 ```bash
 ./tune_motors.sh              # 구간별 PWM-RPM 특성 측정 기반 피드포워드·PI 보정 및 제동 검증
@@ -196,7 +196,7 @@ cd Oh-My-Control
 
 ### 정지 자이로 영점 보정
 
-로봇을 수평 정지 상태로 두고 외장 IMU(HFI-A9)와 카메라 내장 IMU(RealSense D435i)의 자이로 바이어스를 측정·검증합니다. 결과는 [`config/imu_calibration.json`](config/imu_calibration.json)에 저장됩니다.
+로봇을 수평 정지 상태로 두고 외장 IMU(HFI-A9)와 카메라 내장 IMU(RealSense D435i)의 자이로 바이어스를 측정하고 검증합니다. 결과는 [`config/imu_calibration.json`](config/imu_calibration.json)에 저장됩니다.
 
 ```bash
 ./calibrate_imu.sh --stationary                 # 두 IMU 동시 수집·검증
@@ -227,7 +227,7 @@ EOF
 ./.tools/arduino/bin/arduino-cli --config-file .tools/arduino/arduino-cli.yaml core install arduino:avr
 ```
 
-펌웨어 컴파일·업로드 및 단위 테스트 실행 명령은 다음과 같습니다.
+펌웨어 컴파일과 업로드, 단위 테스트는 아래 명령으로 실행합니다.
 
 ```bash
 ./mega_firmware.sh build                              # Mega 모터 제어 펌웨어 빌드
@@ -263,6 +263,6 @@ sudo ./hotspot_on.sh --status    # 현재 Wi-Fi 연결 상태 및 SSH 접속 주
 
 ## 라이선스
 
-저장소의 펌웨어, 제어·보정 도구, 테스트 및 문서에는 [Apache-2.0](LICENSE)을 적용합니다.
-기구 설계 및 참조 URDF 모델의 출처는 [Oh-My-MobileRobot](https://github.com/Leehyunbin0131/Oh-My-MobileRobot)이며, 모델 라이선스([CERN-OHL-P-2.0](resources/LICENSE.robot-model))와 고지([NOTICE.robot-model](resources/NOTICE.robot-model))를 보존했습니다.
-라이다 드라이버 서브모듈 출처: [Slamtec/rplidar_ros](https://github.com/Slamtec/rplidar_ros/tree/ros2).
+저장소의 펌웨어, 제어·보정 도구, 테스트, 문서에는 [Apache-2.0](LICENSE)을 적용합니다.
+기구 설계와 참조 URDF 모델의 출처는 [Oh-My-MobileRobot](https://github.com/Leehyunbin0131/Oh-My-MobileRobot)이고 모델 라이선스([CERN-OHL-P-2.0](resources/LICENSE.robot-model))와 고지([NOTICE.robot-model](resources/NOTICE.robot-model))를 보존했습니다.
+라이다 드라이버 서브모듈은 [Slamtec/rplidar_ros](https://github.com/Slamtec/rplidar_ros/tree/ros2)에서 가져왔습니다.

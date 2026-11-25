@@ -2,7 +2,7 @@
 
 [README](../README.md) · [제어·통신 주기](control_timing.md) · [IMU 보정](imu_calibration.md)
 
-Arduino Mega 2560과 NT-S-DCDM1210 모터 드라이버를 이용한 양륜 차동 구동 제어기의 동작 규격과 시리얼 프로토콜을 정의합니다.
+Arduino Mega 2560과 NT-S-DCDM1210 모터 드라이버로 구성한 양륜 차동 구동 제어기의 동작 규격과 시리얼 프로토콜을 정의합니다.
 
 ## 제어기 기본 사양
 
@@ -16,16 +16,16 @@ Arduino Mega 2560과 NT-S-DCDM1210 모터 드라이버를 이용한 양륜 차�
 | 출력 PWM 제한 | 주행 중 최대 **650**, 0 RPM 감속 최대 **150**, 위치 유지(`HOLD`) 최대 **350** |
 | 명령 유효기간 (Lease) | **300 ms** (주기적 갱신이 중단되면 자동 출력 해제) |
 
-좌우 바퀴 채널과 전진 부호는 [`config/drive_calibration.json`](../config/drive_calibration.json), 바퀴별·방향별 피드포워드 및 PID 계수는 [`config/motor_pid.json`](../config/motor_pid.json)을 기준으로 합니다.
+좌우 바퀴 채널과 전진 부호는 [`config/drive_calibration.json`](../config/drive_calibration.json), 바퀴별·방향별 피드포워드와 PID 계수는 [`config/motor_pid.json`](../config/motor_pid.json)을 기준으로 합니다.
 
 ## 주행 제어와 정지 위치 유지 (`HOLD`)
 
-호스트는 목표 속도를 설정하고, Mega는 엔코더 피드백을 바탕으로 부호 있는 PWM을 계산합니다. 주행 중 새로운 목표 속도를 수신하면 제어 상태를 초기화하지 않고 연속적으로 목표를 갱신합니다.
+호스트는 목표 속도를 설정하고 Mega는 엔코더 피드백을 바탕으로 부호 있는 PWM을 계산합니다. 주행 중에 새 목표 속도를 수신하면 제어 상태를 초기화하지 않고 목표를 연속으로 갱신합니다.
 
 * **주행(`TRACK`)**: 바퀴별·회전 방향별 선형 피드포워드(`slope`, `offset`)와 속도 PID(`kp`, `ki`, `kd`)를 합산해 구동 PWM을 출력합니다.
-* **정지 및 위치 유지(`HOLD`)**: `SET_SPEED 0 0`을 수신한 첫 제어 주기에 현재 엔코더 카운트를 목표 위치(`holdReference`)로 저장하고 `HOLD` 상태로 전환합니다. 위치 오차에 직접 비례하는 PWM 항과 유지 전용 속도 피드백을 결합해 제동 및 정지 위치를 유지합니다.
+* **정지 및 위치 유지(`HOLD`)**: `SET_SPEED 0 0`을 수신한 첫 제어 주기에 현재 엔코더 카운트를 목표 위치(`holdReference`)로 저장하고 `HOLD` 상태로 전환합니다. 위치 오차에 직접 비례하는 PWM 항과 유지 전용 속도 피드백을 결합해 제동하고 정지 위치를 유지합니다.
 * **출력 해제(`STOP`)**: PID 및 위치 유지 제어를 즉시 해제하고 양쪽 모터 PWM을 0으로 설정합니다.
-* **오류 보호(`FAULT`)**: 통신 만료, 엔코더 배선 이상, 과속(100 RPM 초과 100 ms 지속), 위치 유지 한도 초과 시 즉시 출력을 차단하고 오류 코드를 기록합니다. 원인을 해소한 뒤 `CLEAR_FAULT` 명령으로 해제하기 전까지 재구동하지 않습니다. 같은 방향의 RPM 갱신은 방향 오류·출력 포화 감시의 누적 시간을 초기화하지 않습니다.
+* **오류 보호(`FAULT`)**: 통신 만료, 엔코더 배선 이상, 과속(100 RPM 초과 100 ms 지속), 위치 유지 한도 초과가 발생하면 즉시 출력을 차단하고 오류 코드를 기록합니다. 원인을 해소한 뒤 `CLEAR_FAULT` 명령으로 해제하기 전까지 재구동하지 않습니다. 같은 방향의 RPM 갱신은 방향 오류·출력 포화 감시의 누적 시간을 초기화하지 않습니다.
 
 ### 위치 유지 (`HOLD`) 파라미터
 
@@ -54,8 +54,8 @@ Arduino Mega 2560과 NT-S-DCDM1210 모터 드라이버를 이용한 양륜 차�
 | `HOLD_POS channel kp` | 위치 유지용 직접 위치 비례항(PWM/count) 설정 |
 | `HOLD channel enable kp speed pwm deadband error duration saturation` | 위치 유지 활성화 및 안전 한도 설정 |
 
-> **호스트 파서 구현 시 좌/우 인덱스 규칙**:
-> `OMR1,T` 상태 텔레메트리 프레임에서 원시 엔코더 카운트(`counts`) 및 무효 전이(`invalid`) 필드는 **`[오른쪽(D40/41), 왼쪽(D50/51)]` 순서**(`ENC_INDEX = {'L': 1, 'R': 0}`)로 전송되며, 목표/측정 속도(`target_rpm_centi`, `measured_rpm_centi`)·출력(`command_pwm`)·제어 상태 필드는 **드라이버 `[왼쪽(L/M2), 오른쪽(R/M1)]` 순서**(`VEL_INDEX = {'L': 0, 'R': 1}`)로 전송됩니다. 상위 ROS 2 드라이버 작성 시 [`tools/motor_link.py`](../tools/motor_link.py)의 인덱스 매핑을 동일하게 적용합니다.
+> **호스트 파서의 좌/우 인덱스 규칙**:
+> `OMR1,T` 상태 텔레메트리 프레임에서 원시 엔코더 카운트(`counts`)와 무효 전이(`invalid`) 필드는 **`[오른쪽(D40/41), 왼쪽(D50/51)]` 순서**(`ENC_INDEX = {'L': 1, 'R': 0}`)로 전송됩니다. 반면 목표/측정 속도(`target_rpm_centi`, `measured_rpm_centi`), 출력(`command_pwm`), 제어 상태 필드는 **드라이버 `[왼쪽(L/M2), 오른쪽(R/M1)]` 순서**(`VEL_INDEX = {'L': 0, 'R': 1}`)로 전송됩니다. 상위 ROS 2 드라이버를 작성할 때도 [`tools/motor_link.py`](../tools/motor_link.py)의 인덱스 매핑을 동일하게 적용합니다.
 
 ## 구현 파일
 
